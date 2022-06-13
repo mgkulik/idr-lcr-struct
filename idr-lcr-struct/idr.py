@@ -7,9 +7,6 @@ Here I take the IDR regions and generate basic physical-chemical
 transformations to evaluate their characteristics. I also extract the 
 complete sequences with IDRs to use in external tools and analyses.
 
-05.06.2020 - Added the C-terminal 50 to split the data
-
-
 @author: mgkulk
 """
 from Bio import SeqIO
@@ -18,28 +15,13 @@ import numpy as np
 import statistics as stats
 import time
 import pandas as pd
+import json
 import os
 
-import extract_coils_scores as coil_scores
+import resources
+import coil
 
 pd.options.display.max_columns = 30
-
-#'/home/magoncal/Documents/data/projects/idr_cook/'
-#analysis_path = input("BE CAREFULL!! Set the complete path to the folder of the ANALYSIS files: ")
-#basis_path = input("BE CAREFULL!! Set the complete path to the folder of the BASE files: ")
-
-# tabidr_path = basis_path+'mobidb_UP000005640.tab'
-# fastaname = basis_path+'uniprot-proteome_UP000005640.fasta'
-# fastaout = basis_path+'mobidb_UP000005640_comp.fasta'
-# idrs_path = analysis_path+'data_idrs.csv'
-# error_path = basis_path+'mobidb_error.txt'
-
-#tabidr_path = input("Path for the disordered positions (.tab file): ")
-#fastaname = input("Fasta path for the complete proteom: ")
-#fastaout =  input("Path to save the complete output fasta: ")
-#idrs_path = input("Path to save the .csv file with IDR characteristics: ")
-#error_path = input("Path to save errors from the IDR extraction: ")
-#taboth_path = input("Path for the other info for IDRs (.tab file): ")
 
 # Selenocysteine = 21, U, Sec, nonpolar
 # Pyrrolysine = 22, O, Pyl, polar
@@ -49,6 +31,43 @@ AA_CODE_ABRV = ['?', 'Ala', 'Arg', 'Asn', 'Asp', 'Cys', 'Gln', 'Glu', 'Gly', 'Hi
 AA_GROUPS = [[19,8,16,17,5,3,6,22], [14,18,1,15,20,11,10,13,21], [12,2,9], [4,7]]
 AA_GROUPS_NAMES = ['Polar Uncharged', 'Non-Polar', 'Polar Basic', 'Polar Acidic']
 
+
+def get_entry_info(vals):
+    ''' Returns basic info from mobidb predictions dictionary. '''
+    regions = vals['regions']
+    pred_score = vals['scores']
+    return regions, pred_score
+
+def extract_json(filename):
+    ''' Reads the json proteome downloaded from mobidb, extract IDR predictions
+    based on the consensus data and save a simple tab separated file to disk. '''
+    
+    sep = '\t'
+
+    with open(filename, 'r') as handle:
+        json_data = [json.loads(line) for line in handle]
+    
+    # Understanding the structure
+    # The organism file presents only the consensus data ...
+    dt_mobi = list()
+    for a in range(len(json_data)):
+        if ("prediction-disorder-mobidb_lite" in json_data[a]):
+            seq_acc = json_data[a]['acc']
+            seq_vals = json_data[a]['sequence']
+            mobidb_vals = json_data[a]['prediction-disorder-mobidb_lite']
+            mobi_lst = ""
+            reg_data, scores = get_entry_info(mobidb_vals)
+            scores = ','.join([str(i) for i in scores])
+            mobi_lst = seq_acc+sep+scores 
+            for k in range(len(reg_data)):
+                mobi_lst += sep+str(reg_data[k][0])+"-"+str(reg_data[k][1])
+            dt_mobi.append(mobi_lst+"\n")
+    
+    new_name = resources.gen_filename(filename, "mobidb", "idr", "tab")
+    resources.save_file(dt_mobi, new_name)
+    return (new_name)
+    
+
 def get_seq_ints(seq):
     ''' Gets sequence AAs and generate their equivalent numeric sequence'''
     seq_int = np.array([AA_CODE_LIST.index(aa) for aa in seq])
@@ -57,26 +76,10 @@ def get_seq_ints(seq):
     seq_by_group = [sum(seq_by_aa[groups]) for groups in AA_GROUPS]
     return seq_by_group
 
-def read_fasta(fastaname, seq_ints=False):
-    ''' Reads the fasta file and store the sequences and their int equivalents. '''
-    seqs_by_group = np.zeros((75777,4))
-    fasta_data = dict()
-    j=0
-    seqs_len = 0
-    for seq_record in SeqIO.parse(fastaname, 'fasta'):
-        fasta_data[seq_record.id.split('|')[1]] = seq_record
-        seq_len = len(str(seq_record.seq))
-        if seq_ints:
-            seqs_by_group[j, :] = get_seq_ints(str(seq_record.seq))
-            seqs_len = seqs_len + len(str(seq_record.seq))
-        j+=1
-    return fasta_data, seqs_by_group, seqs_len
-#del locals()['fasta_data']
-
                 
 def get_idr_AAcomposition(idr_aa):
-    ''' Calculate the Physical-Chemical proportions of the IDR and the second
-    most common group. '''
+    ''' Calculate the Physical-Chemical proportions of the IDR and extract first 
+    and second most common group. '''
     idr_int = [AA_CODE_LIST.index(aa) for aa in idr_aa]
     idr_group_tots = [sum([el in groups for el in idr_int]) for groups in AA_GROUPS]
     idr_group_props = [i/len(idr_aa) for i in idr_group_tots]
@@ -84,6 +87,7 @@ def get_idr_AAcomposition(idr_aa):
     idr_tops_diff = idr_tops_diff[0]-idr_tops_diff[1]
     idr_tops_diff_prop = sorted(idr_group_props, reverse=True)
     idr_tops_diff_prop = idr_tops_diff_prop[0]-idr_tops_diff_prop[1]
+    # Gets the variance between the groups
     idr_groups_var = np.var(idr_group_tots)
     idr_other_groups = sum(idr_group_tots[2:])
     idr_tops_idx = sorted(range(len(idr_group_tots)), key=lambda k: idr_group_tots[k], reverse=True)
@@ -100,6 +104,7 @@ def get_idr_AAcomposition(idr_aa):
 
 
 def get_idr_bins(idr_size, bin_size=30, bin_max=300):
+    ''' Set the bin size adjusting some label details. '''
     if idr_size>=bin_max:
         bin_start = bin_max
     elif idr_size==bin_size:
@@ -116,11 +121,12 @@ def get_idr_bins(idr_size, bin_size=30, bin_max=300):
         bin_str = str(bin_start)+"+"
     return bin_start, bin_str
 
+
 #seq_idrs = rowsplit
 #seq = str(seq_val.seq)
 #seq_len = len(seq_val)
-#idr = seq_idrs[start_pos:][0]
-def get_idr_data(seq_idrs, seq, seq_len, start_pos, inter_size=50, perc_size=.7):
+#idr = seq_idrs[0]
+def get_idr_data(seq_idrs, seq, seq_len, inter_size=50, perc_size=.7):
     ''' Loops over the IDR file with seq names and IDR positions separated
     by tab and gets general size and position information.'''
     all_idrs = list()
@@ -129,19 +135,8 @@ def get_idr_data(seq_idrs, seq, seq_len, start_pos, inter_size=50, perc_size=.7)
     seq_name = seq_idrs[0]
     idr_scores = ""
     i=1
-    if start_pos==3:
-        scores = seq_idrs[2].split(',')
-        idr_code = seq_idrs[1]
-        if idr_code=='0':
-            idr_type='predicted'
-        elif idr_code=='1':
-            idr_type='indicator'
-        elif idr_code=='2':
-            idr_type='curated'
-    else:
-        idr_type='predicted'
-        scores=[]
-    for idr in seq_idrs[start_pos:]:
+    scores=[]
+    for idr in seq_idrs[2:]:
         idrs = idr.split("-")
         idr_name = seq_name+'_'+str(i)
         idr_num = i
@@ -166,59 +161,40 @@ def get_idr_data(seq_idrs, seq, seq_len, start_pos, inter_size=50, perc_size=.7)
             idr_group_tots, idr_group_props, idr_cats = get_idr_AAcomposition(idr_aa)
             #if (idr_size>=crit_size and (seq_len-idr_end)<=(inter_size-crit_size)):
             #    idr_last50=1
-            lst_idrs = [seq_name, seq_len, idr_name, idr_num, idr_aa, idr_start, idr_rel_start, idr_end, idr_rel_end, idr_size, idr_rel_size, idr_bin, idr_bin_lbl, idr_type, idr_scores, idr_mean_score, idr_median_score] + idr_group_tots + idr_group_props + idr_cats
+            lst_idrs = [seq_name, seq_len, idr_name, idr_num, idr_aa, idr_start, idr_rel_start, idr_end, idr_rel_end, idr_size, idr_rel_size, idr_bin, idr_bin_lbl, idr_scores, idr_mean_score, idr_median_score] + idr_group_tots + idr_group_props + idr_cats
             all_idrs.append(lst_idrs)
             i+=1
         else:
             error_seq.append([idr_name+' - '+idr, 'IDR region outside the sequence.'])
     return all_idrs, error_seq
 
-
-def save_fastas(seq_lst_comp, fastaout):
-    ''' Saving filtered fasta files to use in other tasks. The first file is 
-    complete, the others segregate de sequences in sequences which N AAs from
-    the C-terminal belong to IDRs.'''    
-    with open(fastaout, 'w') as handle:
-      SeqIO.write(seq_lst_comp, handle, "fasta")
-
-      
-def save_file(lst, path):
-    with open(path, 'a') as file:
-        for data in lst:
-          file.write(data)
-
           
-def extract_idrs(tab_path, fasta_data, source, error_path=''):
+def extract_idrs(tab_path, fasta_data, error_path=''):
+    ''' Opens and get the IDR data and fasta data of the sequences of interest.
+    Manages all I/O validations and save errors to disk. '''
     seq_lst, idrs_info, error_lst = [], [], []
     seq_idr_lens = 0
-    if source=='mobidb_':
-        start_pos = 3
-    else:
-        start_pos = 1
     with open(tab_path, 'r') as handle:
         i=0
         for line in enumerate(handle):
             rowsplit = line[1].rstrip("\n").split("\t")
             i+=1
-            #if i==9:
-            #    break
-            if rowsplit[start_pos] != '':
-                try:
-                    seq_name = rowsplit[0].split("_")
-                    seq_val = fasta_data[seq_name[0]]
-                    # Getting IDR properties and adding to a DataFrame 
-                    idr_details, error_seq = get_idr_data(rowsplit, str(seq_val.seq), len(seq_val), start_pos)
-                    if len(idrs_info)==0:
-                        idrs_info = idr_details
-                    else:
-                        idrs_info = idrs_info + idr_details
-                    if len(error_seq)>0:
-                        error_lst = error_lst + error_seq
-                    # Getting sequence info to generate fastas from the sequences with IDRs
-                    seq_lst.append(seq_val)
-                    seq_idr_lens = seq_idr_lens+len(seq_val)
-                except Exception as e:
-                    error_lst.append([rowsplit[0], 'Sequence not available in the Uniprot file.'])
+            #try:
+            seq_name = rowsplit[0].split("_")
+            seq_val = fasta_data[seq_name[0]]
+            # Getting IDR properties and adding to a DataFrame 
+            idr_details, error_seq = get_idr_data(rowsplit, str(seq_val.seq), len(seq_val))
+            if len(idrs_info)==0:
+                idrs_info = idr_details
+            else:
+                idrs_info = idrs_info + idr_details
+            if len(error_seq)>0:
+                error_lst = error_lst + error_seq
+            # Getting sequence info to generate fastas from the sequences with IDRs
+            seq_lst.append(seq_val)
+            seq_idr_lens = seq_idr_lens+len(seq_val)
+            #except Exception as e:
+            #    error_lst.append([rowsplit[0], 'Sequence not available in the Uniprot file.'])
     if len(error_lst)>0:
         if error_path!="":
             with open(error_path, 'w') as outfile:
@@ -229,34 +205,16 @@ def extract_idrs(tab_path, fasta_data, source, error_path=''):
     return seq_lst, seq_idr_lens, idrs_info, error_lst
 
 
-def rename_idrs(pd_idrs):
-    _, counts_seq = np.unique(pd_idrs['seq_name'], return_counts=True)
-    rep_ids=[]
-    for i in counts_seq:
-        rep_ids=rep_ids+list(np.arange(1,i+1))
-    pd_idrs['idr_num'] = rep_ids
-    pd_idrs['idr_name'] = pd_idrs.seq_name.str.cat(pd_idrs['idr_num'].astype(str),sep="_")
-    return pd_idrs
-
-
-def generate_df_idrs(colnames, idrs_info, idrs_path, source, idr_min_sz=20):
+def generate_df_idrs(colnames, idrs_info, idrs_path, idr_min_sz=20):
+    ''' Sorts and re-labels the bin max size using the biggest size of all IDRs.
+    Saves the CSV file to disk.'''    
     pd_idrs = pd.DataFrame(idrs_info, columns=colnames)
     pd_idrs = pd_idrs.sort_values(by=['seq_name', 'idr_start', 'idr_name'])
     pd_idrs = pd_idrs.loc[pd_idrs['idr_size']>=idr_min_sz, :]
     pd_idrs['idr_bin_lbl'] = pd_idrs["idr_bin_lbl"].apply(lambda x: '(300-'+str(max(pd_idrs['idr_size']))+')' if(str(x) == '300+') else x)
-    if source=='mobidb_':
-        pd_idrs = rename_idrs(pd_idrs)
     pd_idrs = pd_idrs.sort_values(by=['idr_name'])
     pd_idrs.to_csv(idrs_path, index=False)
     return pd_idrs
-
-
-def remove_duplicate_seqs(seq_lst):
-    new_seq_lst = list()
-    _, idx_unique = list(np.unique([item.id for item in seq_lst], return_index=True))
-    for i in idx_unique:
-        new_seq_lst.append(seq_lst[i])
-    return new_seq_lst
 
 
 def set_threshold_str(tsh):
@@ -286,39 +244,48 @@ def get_score2regions(pd_idrs, tabidr_path, tsh=.5, kmer=20):
     return tabidr_path
        
 
-def run_all():
-    #pd_idrs = pd.read_csv('analysis/data_idrs.csv')
-    # Getting the sequence and information about its relation to the last 50 AAs of
-    # the sequence
+def run_all(fastaname, tabidr_path, use_toolscores=False):
+
     idr_min_sz=20
-    fasta_data, seq_count_group, tot_lens = read_fasta(fastaname, False)
-    source = os.path.basename(tabidr_path).split('_')[0]+"_"
-    seq_lst, seq_idr_lens, idrs_info, error_lst = extract_idrs(tabidr_path, fasta_data, source, error_path)
-    new_seq_lst = remove_duplicate_seqs(seq_lst)
+    fasta_data, seq_count_group, tot_lens = resources.read_fasta(fastaname, False)
+    error_path = resources.gen_filename(tabidr_path, "mobidb", "idr", "err")
+    seq_lst, seq_idr_lens, idrs_info, error_lst = extract_idrs(tabidr_path, fasta_data, error_path)
+    
+    if len(error_lst) > 0:
+        print("There are errors, please check the file created on disk.")
     
     colnames = ['seq_name', 'seq_len', 'idr_name', 'idr_num', 'idr_aa', 'idr_start', 
                 'idr_rel_start', 'idr_end', 'idr_rel_end', 'idr_size', 'idr_rel_size', 
-                'idr_bin', 'idr_bin_lbl', 'idr_type', 'idr_scores', 'idr_mean_score', 
+                'idr_bin', 'idr_bin_lbl', 'idr_scores', 'idr_mean_score', 
                 'idr_median_score', 'tot_polar', 'tot_non_polar', 'tot_basic', 
                 'tot_acidic', 'prop_polar', 'prop_non_polar', 'prop_basic', 
                 'prop_acidic', 'idr_1st_cat', 'idr_2nd_cat', 'idr_tops_diff', 
                 'idr_tops_diff_prop', 'idr_gp_variance']
-    pd_idrs = generate_df_idrs(colnames, idrs_info, idrs_path, source, idr_min_sz)
+    idrs_path = resources.gen_filename(tabidr_path, "mobidb", "idr_details", "csv")
+    pd_idrs = generate_df_idrs(colnames, idrs_info, idrs_path, idr_min_sz)
     
-    tsh=.6
-    tabidr_path60 = get_score2regions(pd_idrs, tabidr_path, tsh)
-    source = os.path.basename(tabidr_path60).split('_')[0]+"_"
-    _, _, idrs_info60, _ = extract_idrs(tabidr_path60, fasta_data, source, max_len)
-    idrs_path60 = idrs_path.replace(".csv", set_threshold_str(tsh)+".csv").replace("analysis", "analysis/scores_sym")
-    pd_idrs60 = generate_df_idrs(colnames, idrs_info60, idrs_path60, source, idr_min_sz)
+    if use_toolscores:
+        # We end up not using this. The idea was to change the consensus percentage
+        # and evaluate the curve compared to the confirmed IDRs.
+        tsh=.6
+        tabidr_path60 = get_score2regions(pd_idrs, tabidr_path, tsh)
+        source = os.path.basename(tabidr_path60).split('_')[0]+"_"
+        _, _, idrs_info60, _ = extract_idrs(tabidr_path60, fasta_data, source, max_len)
+        idrs_path60 = idrs_path.replace(".csv", set_threshold_str(tsh)+".csv")
+        pd_idrs60 = generate_df_idrs(colnames, idrs_info60, idrs_path60, idr_min_sz)
         
-    # Sort descending the Max IDR size
-    #ord_seq_lst = sorted(seq_lst, key = itemgetter(0), reverse=True)
-    save_fastas(new_seq_lst, fastaout)
+
+    fastaout = resources.gen_filename(tabidr_path, "mobidb", "idr", "fasta")
+    resources.save_fastas(seq_lst, fastaout)
     #idx_idrs_max = np.argsort(-np.array(idrs_max))
-        
+     
+    # Dropped: Compare the proportion of groups of AAs in the complete 
+    # proteome and only in the sequences with IDRs. Kept commented because it 
+    # uses some of the data generated as output of the read_fasta function.
     # Count AA occurrence in all sequences and in the ones with IDRs
-    all_seqs_aa = np.sum(seq_count_group, axis=0, dtype=np.int32)
-    allSeqs_group_prop = all_seqs_aa/tot_lens
-    idr_seqs_aa = np.sum(seq_count_group[idx_count_group, :], axis=0, dtype=np.int32)
-    idrSeqs_group_prop = idr_seqs_aa/seq_idr_lens
+    # all_seqs_aa = np.sum(seq_count_group, axis=0, dtype=np.int32)
+    # allSeqs_group_prop = all_seqs_aa/tot_lens
+    # idr_seqs_aa = np.sum(seq_count_group[idx_count_group, :], axis=0, dtype=np.int32)
+    # idrSeqs_group_prop = idr_seqs_aa/seq_idr_lens
+    
+    return (idrs_path, fastaout)
