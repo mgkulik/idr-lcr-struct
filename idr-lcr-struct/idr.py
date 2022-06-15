@@ -23,15 +23,6 @@ import coil
 
 pd.options.display.max_columns = 30
 
-# Selenocysteine = 21, U, Sec, nonpolar
-# Pyrrolysine = 22, O, Pyl, polar
-AA_CODE_LIST = ['?','A','R','N','D','C','Q','E','G','H','I','L','K','M','F','P','S','T','W','Y','V','U','O','B','Z','X']
-AA_CODE_ABRV = ['?', 'Ala', 'Arg', 'Asn', 'Asp', 'Cys', 'Gln', 'Glu', 'Gly', 'His', 'Ile', 'Leu', 'Lys', 'Met', 'Phe', 'Pro', 'Ser', 'Thr', 'Trp', 'Try', 'Val', 'Sec', 'Pyl', 'Asx', 'Glx', 'Xaa']
-#AA_GROUPS = {'Non-Polar': [14,18,1,1lst_idrs5,20,11,10,13], 'Polar': [19,8,16,17,5,3,6], 'Basic': [12,2,9], 'Acidic': [4,7], 'Aromatics': [14,18,19]}
-AA_GROUPS = [[19,8,16,17,5,3,6,22], [14,18,1,15,20,11,10,13,21], [12,2,9], [4,7]]
-AA_GROUPS_NAMES = ['Polar Uncharged', 'Non-Polar', 'Polar Basic', 'Polar Acidic']
-
-
 def get_entry_info(vals):
     ''' Returns basic info from mobidb predictions dictionary. '''
     regions = vals['regions']
@@ -67,41 +58,6 @@ def extract_json(filename):
     resources.save_file(dt_mobi, new_name)
     return (new_name)
     
-
-def get_seq_ints(seq):
-    ''' Gets sequence AAs and generate their equivalent numeric sequence'''
-    seq_int = np.array([AA_CODE_LIST.index(aa) for aa in seq])
-    seq_by_aa = np.bincount(seq_int)
-    seq_by_aa = np.pad(seq_by_aa, (0, len(AA_CODE_LIST) - len(seq_by_aa)), 'constant')
-    seq_by_group = [sum(seq_by_aa[groups]) for groups in AA_GROUPS]
-    return seq_by_group
-
-                
-def get_idr_AAcomposition(idr_aa):
-    ''' Calculate the Physical-Chemical proportions of the IDR and extract first 
-    and second most common group. '''
-    idr_int = [AA_CODE_LIST.index(aa) for aa in idr_aa]
-    idr_group_tots = [sum([el in groups for el in idr_int]) for groups in AA_GROUPS]
-    idr_group_props = [i/len(idr_aa) for i in idr_group_tots]
-    idr_tops_diff = sorted(idr_group_tots, reverse=True)
-    idr_tops_diff = idr_tops_diff[0]-idr_tops_diff[1]
-    idr_tops_diff_prop = sorted(idr_group_props, reverse=True)
-    idr_tops_diff_prop = idr_tops_diff_prop[0]-idr_tops_diff_prop[1]
-    # Gets the variance between the groups
-    idr_groups_var = np.var(idr_group_tots)
-    idr_other_groups = sum(idr_group_tots[2:])
-    idr_tops_idx = sorted(range(len(idr_group_tots)), key=lambda k: idr_group_tots[k], reverse=True)
-
-    if (idr_tops_diff==0)&((idr_tops_idx[0]==0)&(idr_tops_idx[1]==1)):
-        if (idr_other_groups>0):
-            idr_cat1 = 'Polar Uncharged'
-        else:
-            idr_cat1 = 'Non-Polar'
-    else:
-        idr_cat1 = AA_GROUPS_NAMES[idr_group_props.index(max(idr_group_props))]
-    idr_cat2 = AA_GROUPS_NAMES[idr_tops_idx[1]]
-    return idr_group_tots, idr_group_props, [idr_cat1, idr_cat2, idr_tops_diff, idr_tops_diff_prop, idr_groups_var]
-
 
 def get_idr_bins(idr_size, bin_size=30, bin_max=300):
     ''' Set the bin size adjusting some label details. '''
@@ -158,7 +114,7 @@ def get_idr_data(seq_idrs, seq, seq_len, inter_size=50, perc_size=.7):
             else:
                 idr_mean_score, idr_median_score = 0, 0
                 idr_scores = ''
-            idr_group_tots, idr_group_props, idr_cats = get_idr_AAcomposition(idr_aa)
+            idr_group_tots, idr_group_props, idr_cats = resources.get_idr_AAcomposition(idr_aa)
             #if (idr_size>=crit_size and (seq_len-idr_end)<=(inter_size-crit_size)):
             #    idr_last50=1
             lst_idrs = [seq_name, seq_len, idr_name, idr_num, idr_aa, idr_start, idr_rel_start, idr_end, idr_rel_end, idr_size, idr_rel_size, idr_bin, idr_bin_lbl, idr_scores, idr_mean_score, idr_median_score] + idr_group_tots + idr_group_props + idr_cats
@@ -179,22 +135,26 @@ def extract_idrs(tab_path, fasta_data, error_path=''):
         for line in enumerate(handle):
             rowsplit = line[1].rstrip("\n").split("\t")
             i+=1
-            #try:
-            seq_name = rowsplit[0].split("_")
-            seq_val = fasta_data[seq_name[0]]
-            # Getting IDR properties and adding to a DataFrame 
-            idr_details, error_seq = get_idr_data(rowsplit, str(seq_val.seq), len(seq_val))
-            if len(idrs_info)==0:
-                idrs_info = idr_details
-            else:
-                idrs_info = idrs_info + idr_details
-            if len(error_seq)>0:
-                error_lst = error_lst + error_seq
-            # Getting sequence info to generate fastas from the sequences with IDRs
-            seq_lst.append(seq_val)
-            seq_idr_lens = seq_idr_lens+len(seq_val)
-            #except Exception as e:
-            #    error_lst.append([rowsplit[0], 'Sequence not available in the Uniprot file.'])
+            try:
+                seq_name = rowsplit[0].split("_")
+                seq_val = fasta_data[seq_name[0]]
+                # Getting IDR properties and adding to a DataFrame 
+                idr_details, error_seq = get_idr_data(rowsplit, str(seq_val.seq), len(seq_val))
+                if len(idrs_info)==0:
+                    idrs_info = idr_details
+                else:
+                    idrs_info = idrs_info + idr_details
+                if len(error_seq)>0:
+                    error_lst = error_lst + error_seq
+                # Getting sequence info to generate fastas from the sequences with IDRs
+                seq_lst.append(seq_val)
+                seq_idr_lens = seq_idr_lens+len(seq_val)
+            except Exception as e:
+                # Errors happen when the fasta file does not have the IDs provided
+                # by MobiDB. Two major reasons are obsolete entry or IDR annotated
+                # in longer isoform. Decided to export evidence of the errors in 
+                # disk and drop the IDRs.
+                error_lst.append([rowsplit[0], 'Sequence not available in the Uniprot file.'])
     if len(error_lst)>0:
         if error_path!="":
             with open(error_path, 'w') as outfile:
@@ -213,6 +173,7 @@ def generate_df_idrs(colnames, idrs_info, idrs_path, idr_min_sz=20):
     pd_idrs = pd_idrs.loc[pd_idrs['idr_size']>=idr_min_sz, :]
     pd_idrs['idr_bin_lbl'] = pd_idrs["idr_bin_lbl"].apply(lambda x: '(300-'+str(max(pd_idrs['idr_size']))+')' if(str(x) == '300+') else x)
     pd_idrs = pd_idrs.sort_values(by=['idr_name'])
+    pd_idrs['proteome_id'] = resources.extract_proteome(idrs_path)
     pd_idrs.to_csv(idrs_path, index=False)
     return pd_idrs
 
@@ -263,7 +224,7 @@ def run_all(fastaname, tabidr_path, use_toolscores=False):
                 'idr_tops_diff_prop', 'idr_gp_variance']
     idrs_path = resources.gen_filename(tabidr_path, "mobidb", "idr_details", "csv")
     pd_idrs = generate_df_idrs(colnames, idrs_info, idrs_path, idr_min_sz)
-    
+        
     if use_toolscores:
         # We end up not using this. The idea was to change the consensus percentage
         # and evaluate the curve compared to the confirmed IDRs.
