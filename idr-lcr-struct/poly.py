@@ -15,6 +15,7 @@ import collections
 import math
 
 import resources
+import idrPdb as cross
         
 
 # NOT IN USE
@@ -158,10 +159,10 @@ def generate_poly_groups(df_poly_details):
     return df_poly_details
 
 ### IDR COVERAGE by POLY ###
-def extract_poly_idr(df_idr_details, df_poly, cutoff=.6, min_sz=6):
+def extract_poly_idr(idrcsv_path, df_poly, cutoff=.6, min_size=6):
 
+    df_idr_details = pd.read_csv(idrcsv_path)
     idrs_pos = df_idr_details.loc[:, ['seq_name', 'idr_name', 'idr_size', 'idr_start', 'idr_end']]
-    idrs_pos = idrs_pos.rename(columns={"over_sz": "over_idr_sz"})
     merged_pos = pd.merge(df_poly, idrs_pos, how="left", on="seq_name")
     merged_pos = merged_pos.sort_values(by=['idr_name', 'poly_name'])
     # Here instead of using the IDR real start and ends I use the ones calculated
@@ -172,12 +173,12 @@ def extract_poly_idr(df_idr_details, df_poly, cutoff=.6, min_sz=6):
    
     pos_over, sz_over = cross.define_overlaps(starts_ends)
     orig_over_perc = cross.get_overlap_size(sz_over, poly_sizes)
-    _, long_bool = cross.extract_short_overlaps(sz_over, orig_over_perc, cutoff, min_sz)
+    _, long_bool = cross.extract_short_overlaps(sz_over, orig_over_perc, cutoff, min_size)
     merged_sel = merged_pos.copy()
     merged_sel = merged_sel.loc[long_bool, :]
     
     # Adding the just calculated over_sz for the poly region to use to determine
-    # the SS region (gaps will be accounted there)
+    # the SS region (gaps will be counted later)
     sz_over = sz_over[long_bool]
     orig_over_perc = orig_over_perc[long_bool]
     pos_over = pos_over[long_bool, :]
@@ -268,7 +269,7 @@ def count_aas(seqs_path):
         
 
 ### POLY - IDR - PDB relations ###
-def extract_poly_idr_pdb(df_idr_details, df_poly, cutoff=.6, min_sz=4):
+def extract_poly_idr_pdb(df_idr_details, df_poly, cutoff=.6, min_size=4):
 
     # Filtering the PDB important columns from the IDR perspective
     df_idr_details = df_idr_details.loc[df_idr_details['idr_type']=='predicted', :]
@@ -288,7 +289,7 @@ def extract_poly_idr_pdb(df_idr_details, df_poly, cutoff=.6, min_sz=4):
    
     pos_over, sz_over = cross.define_overlaps(starts_ends)
     orig_over_perc = cross.get_overlap_size(sz_over, poly_sizes)
-    _, long_bool = cross.extract_short_overlaps(sz_over, orig_over_perc, cutoff, min_sz)
+    _, long_bool = cross.extract_short_overlaps(sz_over, orig_over_perc, cutoff, min_size)
     merged_sel = merged_pos.copy()
     merged_sel = merged_sel.loc[long_bool, :]
     
@@ -434,7 +435,7 @@ def get_align_aa_counts(align_reg, pair1, pair2):
 
 
 ### MAIN POLY SESSION
-def run_poly(seqs_path, polyXY_path, n_aa, cutoff, min_size):
+def run_poly(seqs_path, polyXY_path, idrcsv_path, n_aa, cutoff, min_size):
     fasta_data,_,_ = resources.read_fasta(seqs_path)
     poly_lst = extract_polyXY_features(polyXY_path, fasta_data, n_aa)
     colnames = ["seq_name", "poly_name", "poly_num", "poly_start", "poly_end", 
@@ -443,19 +444,21 @@ def run_poly(seqs_path, polyXY_path, n_aa, cutoff, min_size):
                 "poly_aa", "poly_size", "seq_len", "seq_desc", "seq_aa", 
                 "tot_polar", "tot_non_polar", "prop_polar", "prop_non_polar"]
     pd_poly = pd.DataFrame(poly_lst, columns=colnames)
+    pd_poly['proteome_poly_id'] = resources.extract_proteome(seqs_path)
     pd_poly = pd_poly.sort_values(by=['seq_name', 'poly_start', 'poly_end'])
     
     if (n_aa==1):
         #Use it when processing just PolyX. This data will not be used
         source = "polyx"
         pd_poly = pd_poly.drop(columns={"prop_polar", "prop_non_polar", "poly_part1", "poly_part2", "poly_part1_tp", "poly_part2_tp"})
+        
     else:
         # Don't run this for polyX. Makes sense when we have more than 2 different AAs
         source = "polyxy"
         pd_poly = generate_poly_groups(pd_poly)
     
     # Annotating the polyX/Ys inside IDRs
-    #pd_poly = extract_poly_idr(df_idr_details, pd_poly, cutoff, min_size)
+    pd_poly = extract_poly_idr(idrcsv_path, pd_poly, cutoff, min_size)
     polycsv_path = resources.gen_filename(polyXY_path, source, "details", "csv")
     pd_poly.to_csv(polycsv_path, index=False)
     
@@ -528,7 +531,7 @@ def run_idr_poly_global(df_idr_details, df_poly):
 def run_properties():
     _ = get_idr_properties.get_cider_props(df_poly_details, polypar_path, pref)
 
-pref='poly'
+#pref='poly'
 #df_poly = pd.read_csv(polycsv_path)
 #df_poly_new = pd.read_csv('analysis_masked/data_noSeqs_'+pref+'.csv')
 #df_poly_details = pd.read_csv(polycsv_path)
