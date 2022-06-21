@@ -28,10 +28,14 @@ def save_file(lst, path):
     with open(path, 'a') as file:
         for data in lst:
           file.write(data)
-          
+
+def get_dir(filename):
+    return os.path.dirname(filename)
+
+
 def gen_filename(filename, source, proc, ext):
     ''' Extracts the info from the source file name and generates a new file name.'''
-    dir_name = os.path.dirname(filename)
+    dir_name = get_dir(filename)
     file_name = os.path.basename(filename).split('.')[0].split('_')[0]
     sep = "_"
     if proc=="":
@@ -39,8 +43,9 @@ def gen_filename(filename, source, proc, ext):
     new_name = dir_name+"/"+file_name+"_"+source+sep+proc+"."+ext
     return new_name
 
-def save_pickle(var, var_name, BASIS_PATH):
-    with open(BASIS_PATH+var_name, 'ab') as handle:
+
+def save_pickle(var, var_name, mode):
+    with open(var_name, mode) as handle:
         pickle.dump(var, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 def open_pickle(var_name, BASIS_PATH):

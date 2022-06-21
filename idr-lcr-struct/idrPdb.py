@@ -6,22 +6,20 @@ Created on Mon Sep 14 16:38:58 2020
 @author: magoncal
 """
 
-#idrs_path = input("Path for the IDRs CSV: ")
-#pdb_path = input("Path for the blast CSV: ")
-#result_path = input("Path for the idrs complete CSV: ")
-#seqs_path = input("Path for the original fasta file: ")
-#pdb_mask_path = input("Path for the original masked pdb fasta file: ")
-
 from Bio import SeqIO, SearchIO
 from Bio.SubsMat.MatrixInfo import blosum62 as blosum
 from collections import defaultdict
 import pandas as pd
 import numpy as np
+import lxml.etree as ET
+
 import pickle
 import time
 import os
 import re
 import math
+
+import resources
 
 pd.options.display.max_columns = 50
 
@@ -43,6 +41,71 @@ blosum["U", "C"] = 0
 
 ##### SUPPORT #####
 
+
+def extract_blast_pairs(xml_path, pickle_sz, sep1, sep2):
+    
+    pdb_filename = resources.gen_filename(xml_path, "blast", "", "pickle")
+    
+    hsp_cols = ['Hsp_num', 'Hsp_bit-score', 'Hsp_evalue', 
+            'Hsp_query-from', 'Hsp_query-to', 'Hsp_hit-from', 'Hsp_hit-to',
+            'Hsp_identity', 'Hsp_gaps', 'Hsp_qseq', 'Hsp_hseq', 'Hsp_midline']
+    
+    i=0
+    mode =""
+    dt_pdb = dict()
+    start_time = time.time()
+    for event, elem in ET.iterparse(xml_path, events=('end',)):
+        if elem.tag == "Iteration_query-def":
+            query_vals = list()
+            query_vals.append(elem.text.split(sep1)[1])
+            elem.clear()
+        elif elem.tag == "Hit":
+            hits_vals = list()
+            for hit_child in elem:
+                if hit_child.tag == "Hit_num":
+                    hits_vals.append(hit_child.text)
+                elif hit_child.tag == "Hit_id":
+                    hits_vals.append(hit_child.text.split('|')[1]+'_'+hit_child.text.split('|')[2])
+                elif hit_child.tag == "Hit_def":
+                    hits_vals.append(hit_child.text)
+                elif hit_child.tag == "Hit_len":
+                    hits_vals.append(hit_child.text)
+                elif hit_child.tag == "Hit_hsps":
+                    for hsps in hit_child:
+                        if hsps.tag == "Hsp":
+                            hsps_vals = list()
+                            i+=1
+                            for hsp_child in hsps:
+                                #print('--'+hsp_child.tag+hsp_child.text)
+                                if (hsp_child.tag in hsp_cols):
+                                    hsps_vals.append(hsp_child.text)
+                                hsp_child.clear()
+                                while elem.getprevious() is not None:
+                                    del elem.getparent()[0]
+                                
+                            dt_pdb[i] = query_vals+hits_vals+hsps_vals
+                            if i % pickle_sz == 0:
+                                print(i)
+                                if (i==pickle_sz):
+                                    mode = 'wb'
+                                else:
+                                    mode = 'ab'
+                                resources.save_pickle(dt_pdb, pdb_filename)
+                                dt_pdb = dict()
+                        hsps.clear()
+                hit_child.clear()
+            elem.clear()
+    print(i)
+    if (mode==""):
+        mode = 'wb'
+    resources.save_pickle(dt_pdb, pdb_filename, 'wb')
+    
+    tot_in_sec = time.time() - start_time
+    print("--- %s seconds ---" % (tot_in_sec))
+    print("Extraction from blast xml file finished.")
+    return (pdb_filename)
+
+
 def count_pdbs_by_eval(dt_pdb):
     sum_10e_05 = 0
     sum_001 = 0
@@ -57,40 +120,19 @@ def count_pdbs_by_eval(dt_pdb):
     print('# PDBs <= 10e-05: {0}'.format(sum_10e_05))
     print('# PDBs > 10e-05 & <= 0.01: {0}'.format(sum_001))
     print('# PDBs > 0.01 & <= 10: {0}'.format(sum_10))
-
-def save_pickle(var, var_name, BASIS_PATH):
-    with open(BASIS_PATH+var_name, 'ab') as handle:
-        pickle.dump(var, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-def open_pickle(var_name, BASIS_PATH):
-    objs = []
-    with open(BASIS_PATH+var_name, 'rb') as handle:
-        while 1:
-            try:
-                objs.append(pickle.load(handle))
-            except EOFError:
-                break
-    var = np.concatenate(objs, axis=0)
-    return var
-
-
-# BASIS_PATH, 'starts_ends_idrs.pickle'
-def del_last_file(path, f_name):
-    if ~isinstance(f_name, str):
-        f_name = [f_name]
-    for name in f_name:
-        files = sorted([f.path for f in os.scandir(path_base) if (re.search(r'\W*.pickle', f.path))])
-        if name in files:            
-            pass
     
 
 ##### FROM dt_pdb #####
-def positions2array(df_idr, pdb_path, ids_pos=(0,8,9), cols_df = ['idr_start', 'idr_end'], pickle_sz=10e+05, path='', f_name=''):
+def positions2array(df_idr, pdb_path, ids_pos=(0,8,9), cols_df = ['idr_start', 'idr_end'], pickle_sz=10e+05, f_name=''):
     ''' Replicates the start and end positions of each IDR and PDB regions
     to a numpy array.'''
+    
+    f_name = resources.gen_filename(pdb_path, f_name, "", "pickle")
+    
     starts_ends, idx_million = [], []
     len_startsends, i = 0, 0
     IDR_old=''
+    mode=''
     start_time = time.time()
     with open(pdb_path, 'rb') as handle:
         while 1:
@@ -109,7 +151,11 @@ def positions2array(df_idr, pdb_path, ids_pos=(0,8,9), cols_df = ['idr_start', '
                         starts_ends = np.concatenate(starts_ends, axis=0)
                         len_startsends += len(starts_ends)
                         idx_million.append(len_startsends)
-                        save_pickle(starts_ends, f_name, path)
+                        if (pickle_sz==i):
+                            mode = 'wb'
+                        else:
+                            mode = 'ab'
+                        resources.save_pickle(starts_ends, f_name, mode)
                         starts_ends = []
                     IDR_old = val[ids_pos[0]]
                     i+=1
@@ -121,19 +167,25 @@ def positions2array(df_idr, pdb_path, ids_pos=(0,8,9), cols_df = ['idr_start', '
     starts_ends = np.concatenate(starts_ends, axis=0)
     len_startsends += len(starts_ends)
     idx_million.append(len_startsends)
-    save_pickle(starts_ends, f_name, path)
+    if (mode==""):
+        mode="wb"
+    resources.save_pickle(starts_ends, f_name, mode)
     tot_in_sec = time.time() - start_time
     print("--- %s seconds ---" % (tot_in_sec))
+    print("Pairing starts and ends step finished.")
     return idx_million
 
 # un_ids = [0:seq_name, 1:idr_name, 2:hit_id, 3:pdb_name, 4:hsp_id, 5:internalID]
 # gen_info = [0:bitscore, 1:hit_len, 2:pdb_start, 3:pdb_end, 4:identity, 5:seq_align_start, 6:seq_align_end, 7:seq_size, 8:internalID, 9:internalID2]
-def get_another_data(df_idr, pdb_path, idx_million, ids_pos=(0,1,2,5,6,4,10,11,12,7,14,15), cols_df = ['idr_name', 'idr_size'], path='', pickle_sz=10e+05, dt=(True,True), file_names=''):
-    ''' Generates a numpy array of unique IDs and other relevant data.'''
+def get_another_data(df_idr, pdb_path, idx_million, ids_pos=(0,1,2,5,6,4,10,11,12,7,14,15), cols_df = ['idr_name', 'idr_size'], pickle_sz=10e+05, dt=(True,True), file_names=''):
+    ''' Generates a numpy array of unique IDs and other relevant data and 
+    save them to pickle files in disk. '''
+    
     assert (sum(dt)==1 or sum(dt)==2), "Please inform a tuple with the values you want to generate (ids and evalues, text data)."
     assert ((sum(dt)==2 and len(file_names)==5) or (sum(dt)==1 and len(file_names)>=4)), "Please provide the file names to be used in the pickles."
     
     sz = idx_million[0]
+    mode=""
     if dt[0]:
         evalues = np.empty(sz, dtype=float)
         idr_sizes = np.empty(sz, dtype=int)
@@ -182,11 +234,14 @@ def get_another_data(df_idr, pdb_path, idx_million, ids_pos=(0,1,2,5,6,4,10,11,1
                         if ((i>0)&(i%pickle_sz==0)):
                             #if (i==(pickle_sz*2)):
                             #    break
-                            if path!='':
-                                save_pickle(evalues, file_names[0], path)
-                                save_pickle(idr_sizes, file_names[1], path)
-                                save_pickle(un_ids, file_names[2], path)
-                                save_pickle(gen_info, file_names[3], path)
+                            if (pickle_sz==i):
+                                mode = 'wb'
+                            else:
+                                mode = 'ab'
+                            resources.save_pickle(evalues, resources.gen_filename(pdb_path, file_names[0], "", "pickle"), mode)
+                            resources.save_pickle(idr_sizes, resources.gen_filename(pdb_path, file_names[1], "", "pickle"), mode)
+                            resources.save_pickle(un_ids, resources.gen_filename(pdb_path, file_names[2], "", "pickle"), mode)
+                            resources.save_pickle(gen_info, resources.gen_filename(pdb_path, file_names[3], "", "pickle"), mode)
                             if len(idx_million) > i/pickle_sz:
                                 sz = idx_million[int(i/pickle_sz)]-idx_million[int((i/pickle_sz)-1)]
                                 evalues = np.empty(sz, dtype=float)
@@ -203,8 +258,7 @@ def get_another_data(df_idr, pdb_path, idx_million, ids_pos=(0,1,2,5,6,4,10,11,1
                         m=m+len(filtered)
                         
                         if ((i>0)&(i%pickle_sz==0)):
-                            if path!='':
-                                save_pickle(seqs_blast, file_names[4], path)
+                            resources.save_pickle(seqs_blast, resources.gen_filename(pdb_path, file_names[4], "", "pickle"), mode)
                             if len(idx_million) > i/pickle_sz:
                                 sz = idx_million[int(i/pickle_sz)]-idx_million[int((i/pickle_sz)-1)]
                                 seqs_blast = np.empty((sz,4), dtype=object)
@@ -217,15 +271,19 @@ def get_another_data(df_idr, pdb_path, idx_million, ids_pos=(0,1,2,5,6,4,10,11,1
             except EOFError:
                 break
     print(i)
+    if (mode==""):
+        mode="wb"
     if dt[0]:
-        save_pickle(evalues, file_names[0], path)
-        save_pickle(idr_sizes, file_names[1], path)
-        save_pickle(un_ids, file_names[2], path)
-        save_pickle(gen_info, file_names[3], path)
+        resources.save_pickle(evalues, resources.gen_filename(pdb_path, file_names[0], "", "pickle"), mode)
+        resources.save_pickle(idr_sizes, resources.gen_filename(pdb_path, file_names[1], "", "pickle"), mode)
+        resources.save_pickle(un_ids, resources.gen_filename(pdb_path, file_names[2], "", "pickle"), mode)
+        resources.save_pickle(gen_info, resources.gen_filename(pdb_path, file_names[3], "", "pickle"), mode)
     if dt[1]:
-        save_pickle(seqs_blast, file_names[4], path)
+        resources.save_pickle(seqs_blast, resources.gen_filename(pdb_path, file_names[4], "", "pickle"), mode)
     tot_in_sec = time.time() - start_time
     print("--- %s seconds ---" % (tot_in_sec))
+    print("Extraction from blast pickle finished.")
+    
 
 ##### AUX get_all #####
 def define_overlaps(pos):
@@ -349,7 +407,7 @@ def filter_pdb_array(arr_data, filtered_eval):
     return filtered_arr
 
 
-def merge_noIDRs_pdbs(df_noPDB, df_idrs_dt, pdbs_overlap, min_eval, max_eval,PREF):
+def merge_noIDRs_pdbs(df_noPDB, df_idrs_dt, pdbs_overlap, min_eval, max_eval, PREF):
     if max_eval==0.0001:
         smax_eval = 'b_10e-05'
         smax_eval_name = '10e-05'
@@ -499,12 +557,12 @@ def report_sizes(idrs_nopdb, idrs_nooverlap, idrs_shortoverlap, df_idrs_dt, prot
     print()
 
 ##### FUNC get_all #####
-def generate_all_dfs(BASIS_PATH, df_idr, min_eval, max_eval, PREF, cutoff=(.5,30), save=False, file_names=''):
-    starts_ends = open_pickle(file_names[0], BASIS_PATH)
-    evalues = open_pickle(file_names[1], BASIS_PATH)
-    idr_sizes = open_pickle(file_names[2], BASIS_PATH)
-    un_ids = open_pickle(file_names[3], BASIS_PATH)
-    gen_info = open_pickle(file_names[4], BASIS_PATH)
+def generate_all_dfs(basis_path, df_idr, min_eval, max_eval, PREF, cutoff=(.5,30), save=False, file_names=''):
+    starts_ends = resources.open_pickle(file_names[0], basis_path)
+    evalues = resources.open_pickle(file_names[1], basis_path)
+    idr_sizes = resources.open_pickle(file_names[2], basis_path)
+    un_ids = resources.open_pickle(file_names[3], basis_path)
+    gen_info = resources.open_pickle(file_names[4], basis_path)
     
     # Removing the IDRs with overlaps in the last iteration
     if ('removed_on' in df_idr) and (not save):
@@ -557,3 +615,25 @@ def generate_all_dfs(BASIS_PATH, df_idr, min_eval, max_eval, PREF, cutoff=(.5,30
         #df_idr = mark_overlap(df_idr, df_info_nopdb, pdbs_overlap, pdbs_short, PREF)
         
     return idrs_all_nopdb, pdbs_overlap, pdbs_short, df_idr
+
+
+def merge_idr_pdb(idrs_path, pdb_path, file_names):
+    # This process can take several minutes to run.
+    
+    basis_path = resources.get_dir(pdb_path)
+    
+    # Not sure if the separators can be adjusted in the blast file
+    sep1 = "|"
+    sep2 = "|"
+    # Dumping numpy objects to disk to save memory
+    pickle_sz=10e+05
+    
+    # Starting with the extraction of each blast pair from the xml file
+    blast_pickle = extract_blast_pairs(pdb_path, pickle_sz, sep1, sep2)
+    
+    df_idr = pd.read_csv(idrs_path)
+    
+    # Replicating the PDBs and IDRs to extract Positions, E-value and unique IDSs
+    idx_million = positions2array(df_idr, blast_pickle, (0,8,9), ['idr_start', 'idr_end'], pickle_sz, 'starts_ends')
+    get_another_data(df_idr, blast_pickle, idx_million, (0,1,2,5,6,4,10,11,12,7,14,15,16,8,9), 
+                                   ['idr_name', 'idr_size'], pickle_sz, (1,1), file_names)

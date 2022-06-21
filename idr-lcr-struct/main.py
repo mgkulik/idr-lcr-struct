@@ -14,8 +14,10 @@ future submission to PyPi.
 import idr
 import os
 import poly
+import idrPdb
 
 seq = [0,5]
+file_names=['evalues_idrs', 'idr_sizes', 'unique_ids', 'gen_info', 'blast_over']
 locals_var =  locals()
 
 
@@ -82,9 +84,20 @@ elif (int(num_sel)==3):
 
     
 elif (int(num_sel)==4):
+    """ Several outputs that save the crossing data do disc to save memory (use pickle files) .
+    
+    Main output will be a big csv file with all the cases where and IDR
+    in our set overlapped with a PDB sequence in a significant way. All IDRs not
+    overlapped with PDB are also kept for future analysis.
+    
+    IMPORTANT: This file may have multiple entries for each IDR. """
     
     if not "idr_details" in locals_var:
         idr_details = input("Provide the path for the IDR basic data (generated in step 2): ")
+        
+    blast_path = input("Provide the path for the blast file: ")
+    
+    idrPdb.merge_idr_pdb(idr_details, blast_path, file_names)
     
     
 else:
