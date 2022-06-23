@@ -328,7 +328,7 @@ def filter_no_pdb(df_idrs_dt, un_ids):
 
 #Control Q9BUP0 - short with long
 #Control Q92793 - short with some long
-def filter_no_overlap(df_idrs_dt,un_ids,pos_over,PREF):
+def filter_no_overlap(df_idrs_dt,un_ids,pos_over,prefix):
     # Unique IDR IDs with counts (they were doubled by the PDB occurrences)
     total_counts = np.unique(un_ids[:, 1], return_counts=True)
     # Unique IDR IDs with counts for the ones without overlaps
@@ -340,7 +340,7 @@ def filter_no_overlap(df_idrs_dt,un_ids,pos_over,PREF):
     # gets the IDR names where no PDB had overlaps (because some of the PDB may have overlaps and some may not)
     ids_nooverlap = total_nooverlap[0][total_nooverlap[1]==idrs_counts_filt[1]]
     # Filters the Dataframe to keep just the IDRs with no overlaps at all
-    idrs_nooverlap = df_idrs_dt[df_idrs_dt[PREF+'_name'].isin(ids_nooverlap)]
+    idrs_nooverlap = df_idrs_dt[df_idrs_dt[prefix+'_name'].isin(ids_nooverlap)]
     #prots_nooverlap = idrs_nooverlap['seq_name'].unique().tolist()
     return idrs_nooverlap#, prots_nooverlap
 
@@ -359,15 +359,15 @@ def extract_short_overlaps(sz_over, over_perc, cutoff=.5, min_sz=30):
     return check_short, check_long
 
 
-def filter_short_overlaps(df_idrs_dt,un_ids,short_bool,long_bool,PREF):
+def filter_short_overlaps(df_idrs_dt,un_ids,short_bool,long_bool,prefix):
     pdbs_long = np.unique(un_ids[long_bool, 1])
     short_over = np.unique(un_ids[short_bool, 1])
     short_over = short_over[~np.isin(short_over, pdbs_long)]
-    idrs_short_over = df_idrs_dt[df_idrs_dt[PREF+'_name'].isin(short_over)]
+    idrs_short_over = df_idrs_dt[df_idrs_dt[prefix+'_name'].isin(short_over)]
     return idrs_short_over
 
 
-def filter_overlaps(df_idrs_dt,un_ids,pos_over,starts_ends,evalues,gen_info,short_bool,long_bool,over_perc,sz_over,cols,PREF):
+def filter_overlaps(df_idrs_dt,un_ids,pos_over,starts_ends,evalues,gen_info,short_bool,long_bool,over_perc,sz_over,cols,prefix):
     p_ids_all = un_ids[long_bool, :-1]
     p_posit_over = pos_over[long_bool, :]
     p_posit_orig = starts_ends[long_bool, :]
@@ -387,7 +387,7 @@ def filter_overlaps(df_idrs_dt,un_ids,pos_over,starts_ends,evalues,gen_info,shor
     pdb_short = pd.DataFrame(np.concatenate([p_ids_all,p_gen_info,p_posit_over,p_posit_orig,p_evals.reshape(len(p_evals),1), p_overl_perc.reshape(len(p_overl_perc),1), p_sz_over], axis=1), columns=cols)
     
     idrs_over = np.unique(un_ids[long_bool, 1])
-    df_idrs_dt_over = df_idrs_dt[df_idrs_dt[PREF+'_name'].isin(idrs_over)]
+    df_idrs_dt_over = df_idrs_dt[df_idrs_dt[prefix+'_name'].isin(idrs_over)]
     return df_idrs_dt_over, pdb_over, pdb_short
 
 
@@ -407,7 +407,7 @@ def filter_pdb_array(arr_data, filtered_eval):
     return filtered_arr
 
 
-def merge_noIDRs_pdbs(df_noPDB, df_idrs_dt, pdbs_overlap, min_eval, max_eval, PREF):
+def merge_noIDRs_pdbs(df_noPDB, df_idrs_dt, pdbs_overlap, min_eval, max_eval, prefix):
     if max_eval==0.0001:
         smax_eval = 'b_10e-05'
         smax_eval_name = '10e-05'
@@ -427,51 +427,51 @@ def merge_noIDRs_pdbs(df_noPDB, df_idrs_dt, pdbs_overlap, min_eval, max_eval, PR
     else:
         smin_eval = 'd_10'
     
-    cols2add = [PREF+'_name', 'pdb_name', 'pdb_evalue', 'over_perc', 'over_sz', 'bitscore', 'internal_id', 'internal_id2', 'seq_start', 'seq_end', 'seq_align_start', 'seq_align_end', 'pdb_start', 'pdb_end', 'hit_id', 'hsp_id', 'identity']
+    cols2add = [prefix+'_name', 'pdb_name', 'pdb_evalue', 'over_perc', 'over_sz', 'bitscore', 'internal_id', 'internal_id2', 'seq_start', 'seq_end', 'seq_align_start', 'seq_align_end', 'pdb_start', 'pdb_end', 'hit_id', 'hsp_id', 'identity']
     df_all_pdbs = pdbs_overlap.loc[:, cols2add]
     df_all_pdbs.loc[:, 'pdb_name'] = df_all_pdbs.loc[:, 'pdb_name'].astype(str)
     for cols in cols2add[2:]:
         df_all_pdbs.loc[:, cols] = df_all_pdbs.loc[:, cols].astype(float)
     
     # End up with more than a thousand alignments to some proteins. Filtering to 20
-    #df_all_pdbs = df_all_pdbs.sort_values(by=[PREF+'_name', 'over_perc','pdb_evalue', 'bitscore'], ascending=[True, False, True, False]).drop_duplicates(subset=[PREF+'_name'])
-    df_all_pdbs = df_all_pdbs.sort_values(by=[PREF+'_name', 'over_perc','pdb_evalue', 'bitscore'], ascending=[True, False, True, False])
+    #df_all_pdbs = df_all_pdbs.sort_values(by=[prefix+'_name', 'over_perc','pdb_evalue', 'bitscore'], ascending=[True, False, True, False]).drop_duplicates(subset=[prefix+'_name'])
+    df_all_pdbs = df_all_pdbs.sort_values(by=[prefix+'_name', 'over_perc','pdb_evalue', 'bitscore'], ascending=[True, False, True, False])
     # When I filtered to 20, in some cases all alignments where synthetic.
     # Evaluating without the filter if this changes.
     #df_all_pdbs["val"] = 1
-    #df_all_pdbs["num_count"] = df_all_pdbs.groupby(PREF+'_name')['val'].cumsum()
+    #df_all_pdbs["num_count"] = df_all_pdbs.groupby(prefix+'_name')['val'].cumsum()
     #df_all_pdbs = df_all_pdbs.loc[df_all_pdbs["num_count"]<=20, cols2add]
     
-    df_all_pdbs = df_all_pdbs.loc[~df_all_pdbs[PREF+'_name'].isin(df_noPDB[PREF+'_name'].unique())]
+    df_all_pdbs = df_all_pdbs.loc[~df_all_pdbs[prefix+'_name'].isin(df_noPDB[prefix+'_name'].unique())]
     df_all_pdbs['removed_on_s'] = smax_eval
     df_all_pdbs['removed_on'] = smax_eval_name
     df_all_pdbs['kept_on'] = smin_eval
     df_all_pdbs['kept_on'] = df_all_pdbs['kept_on'].astype(str)
     
     #new_df_idrs_dt = df_idrs_dt.copy()
-    sel = df_idrs_dt[PREF+'_name'].isin(df_all_pdbs[PREF+'_name'].unique())
+    sel = df_idrs_dt[prefix+'_name'].isin(df_all_pdbs[prefix+'_name'].unique())
     if 'pdb_name' in df_idrs_dt:
         sel_cols = cols2add[1:]+['removed_on_s', 'removed_on', 'kept_on']
         add_df_idrs = df_idrs_dt.loc[sel, df_idrs_dt.columns.difference(sel_cols)]
-        add_df_idrs = pd.merge(add_df_idrs, df_all_pdbs, how='left', on=PREF+'_name')
+        add_df_idrs = pd.merge(add_df_idrs, df_all_pdbs, how='left', on=prefix+'_name')
         df_idrs_dt = df_idrs_dt.drop(df_idrs_dt[sel].index)
         df_idrs_dt = pd.concat([df_idrs_dt, add_df_idrs], ignore_index=True)
         #for cols in cols2add[1:]:
         #    df_idrs_dt.loc[sel, cols] = list(df_all_pdbs.loc[:, cols])
     else:
-        df_idrs_dt = pd.merge(df_idrs_dt, df_all_pdbs, how='left', on=PREF+'_name')
-    df_idrs_dt = df_idrs_dt.sort_values(by=['seq_name', PREF+'_num'])
+        df_idrs_dt = pd.merge(df_idrs_dt, df_all_pdbs, how='left', on=prefix+'_name')
+    df_idrs_dt = df_idrs_dt.sort_values(by=['seq_name', prefix+'_num'])
     return df_idrs_dt
 
 
-def mark_overlap(df_idr, idrs_nopdb, pdbs_overlap, pdbs_short, PREF):
-    ids_noover = np.unique(idrs_nopdb.loc[:, PREF+'_name'])
-    check_noover = df_idr[PREF+'_name'].isin(ids_noover).values
-    idrs_pdb = np.unique(pdbs_overlap.loc[:, PREF+'_name'])
-    check_pdb = df_idr[PREF+'_name'].isin(idrs_pdb).values
-    idrs_short = np.unique(pdbs_short.loc[:, PREF+'_name'])
+def mark_overlap(df_idr, idrs_nopdb, pdbs_overlap, pdbs_short, prefix):
+    ids_noover = np.unique(idrs_nopdb.loc[:, prefix+'_name'])
+    check_noover = df_idr[prefix+'_name'].isin(ids_noover).values
+    idrs_pdb = np.unique(pdbs_overlap.loc[:, prefix+'_name'])
+    check_pdb = df_idr[prefix+'_name'].isin(idrs_pdb).values
+    idrs_short = np.unique(pdbs_short.loc[:, prefix+'_name'])
     df_pdb = df_idr["pdb_name"].isna().values
-    check_short = df_idr[PREF+'_name'].isin(idrs_short).values
+    check_short = df_idr[prefix+'_name'].isin(idrs_short).values
     check_short = check_short&df_pdb
     if not "with_pdb" in df_idr:
         df_idr["with_pdb"] = ""
@@ -503,7 +503,7 @@ def group_max(groups, data):
     return data[index]
 
 
-def eval_no_overlaps(over_perc, gen_info, starts_ends, un_ids, evalues, PREF):
+def eval_no_overlaps(over_perc, gen_info, starts_ends, un_ids, evalues, prefix):
     bool_nopdb = over_perc==0
     seq_lens = gen_info[bool_nopdb, 5].astype(int)
     evalues_pdb = evalues[bool_nopdb]
@@ -522,7 +522,7 @@ def eval_no_overlaps(over_perc, gen_info, starts_ends, un_ids, evalues, PREF):
     end_rel_max = end_max/seq_lens
     evalue_min = group_min(rep_idx, evalues_pdb)
     evalue_max = group_max(rep_idx, evalues_pdb)
-    cols = [PREF+"_name", "nopdb_start_min", "nopdb_end_min", "nopdb_rel_start_min", 
+    cols = [prefix+"_name", "nopdb_start_min", "nopdb_end_min", "nopdb_rel_start_min", 
             "nopdb_rel_end_min", "nopdb_start_max", "nopdb_end_max", 
             "nopdb_rel_start_max", "nopdb_rel_end_max", "nopbdb_evalue_min",
             "nopbdb_evalue_max"]
@@ -557,7 +557,7 @@ def report_sizes(idrs_nopdb, idrs_nooverlap, idrs_shortoverlap, df_idrs_dt, prot
     print()
 
 ##### FUNC get_all #####
-def generate_all_dfs(basis_path, df_idr, min_eval, max_eval, PREF, cutoff=(.5,30), save=False, file_names=''):
+def generate_all_dfs(basis_path, df_idr, min_eval, max_eval, prefix, cutoff=(.5,30), save=False, file_names=''):
     starts_ends = resources.open_pickle(file_names[0], basis_path)
     evalues = resources.open_pickle(file_names[1], basis_path)
     idr_sizes = resources.open_pickle(file_names[2], basis_path)
@@ -567,7 +567,7 @@ def generate_all_dfs(basis_path, df_idr, min_eval, max_eval, PREF, cutoff=(.5,30
     # Removing the IDRs with overlaps in the last iteration
     if ('removed_on' in df_idr) and (not save):
         df_idr_filtered = df_idr.loc[df_idr['removed_on'].isna()]
-        idrs_removed = df_idr.loc[~(df_idr['removed_on'].isna()), PREF+'_name'].unique()
+        idrs_removed = df_idr.loc[~(df_idr['removed_on'].isna()), prefix+'_name'].unique()
         un_ids, starts_ends, idr_sizes, evalues, gen_info = filter_kept_idrs(idrs_removed, un_ids, starts_ends, idr_sizes, evalues, gen_info)
     else:
         df_idr_filtered = df_idr.copy()
@@ -587,40 +587,47 @@ def generate_all_dfs(basis_path, df_idr, min_eval, max_eval, PREF, cutoff=(.5,30
     idrs_nopdb, prots_nopdb = filter_no_pdb(df_idr_filtered,un_ids)
     idrs_nopdb = idrs_nopdb.assign(pdb_type='No Homologs')
     # Filtering IDRs without overlap
-    idrs_nooverlap = filter_no_overlap(df_idr_filtered,un_ids,pos_over,PREF)
+    idrs_nooverlap = filter_no_overlap(df_idr_filtered,un_ids,pos_over,prefix)
     idrs_nooverlap = idrs_nooverlap.assign(pdb_type='No Overlaps')
     # Filter IDRs with short overlap - up to 5% coverage or 10 AA
-    idrs_shortoverlap = filter_short_overlaps(df_idr_filtered,un_ids,short_bool,long_bool, PREF)
+    idrs_shortoverlap = filter_short_overlaps(df_idr_filtered,un_ids,short_bool,long_bool, prefix)
     idrs_shortoverlap = idrs_shortoverlap.assign(pdb_type='Short Overlaps')
     
     idrs_all_nopdb = pd.concat([idrs_nopdb, idrs_nooverlap, idrs_shortoverlap], ignore_index=True)
     
     # Filtering IDRs with long overlaps (for validation purposes)
-    cols=['seq_name', PREF+'_name', 'hit_id', 'pdb_name', 'hsp_id', 'bitscore', 
+    cols=['seq_name', prefix+'_name', 'hit_id', 'pdb_name', 'hsp_id', 'bitscore', 
           'hit_len', 'pdb_start', 'pdb_end', 'identity', 'seq_align_start', 
           'seq_align_end', 'seq_len', 'internal_id', 'internal_id2', 'over_start', 'over_end', 
-          PREF+'_start', PREF+'_end', 'seq_start', 'seq_end', 'pdb_evalue', 'over_perc', 'over_sz']
-    idrs_overlap, pdbs_overlap, pdbs_short = filter_overlaps(df_idr_filtered,un_ids,pos_over,starts_ends,evalues,gen_info,short_bool,long_bool,over_perc,sz_over,cols,PREF)
+          prefix+'_start', prefix+'_end', 'seq_start', 'seq_end', 'pdb_evalue', 'over_perc', 'over_sz']
+    idrs_overlap, pdbs_overlap, pdbs_short = filter_overlaps(df_idr_filtered,un_ids,pos_over,starts_ends,evalues,gen_info,short_bool,long_bool,over_perc,sz_over,cols,prefix)
     report_sizes(idrs_nopdb, idrs_nooverlap, idrs_shortoverlap, df_idr, prots_nopdb, idrs_all_nopdb, max(evalues))
-    df_info_nopdb = eval_no_overlaps(over_perc, gen_info, starts_ends, un_ids, evalues, PREF)
+    df_info_nopdb = eval_no_overlaps(over_perc, gen_info, starts_ends, un_ids, evalues, prefix)
     if save:
         name = re.sub(r'\.', '-', str(max_eval))
-        idrs_all_nopdb.to_csv('analysis/nopdb_all_'+PREF+'_'+name+'.csv', index=False)
-        idrs_overlap.to_csv('analysis/df_over_'+PREF+'_'+name+'.csv', index=False)
-        pdbs_overlap.to_csv('analysis/df_overpdb_'+PREF+'_'+name+'.csv', index=False)
-        pdbs_short.to_csv('analysis/df_shortpdb_'+PREF+'_'+name+'.csv', index=False)
-        df_info_nopdb.to_csv('analysis/nopdb_info_'+PREF+'_'+name+'.csv', index=False)
+        idrs_all_nopdb.to_csv(basis_path+'nopdb_all_'+prefix+'_'+name+'.csv', index=False)
+        idrs_overlap.to_csv(basis_path+'df_over_'+prefix+'_'+name+'.csv', index=False)
+        pdbs_overlap.to_csv(basis_path+'df_overpdb_'+prefix+'_'+name+'.csv', index=False)
+        pdbs_short.to_csv(basis_path+'df_shortpdb_'+prefix+'_'+name+'.csv', index=False)
+        df_info_nopdb.to_csv(basis_path+'nopdb_info_'+prefix+'_'+name+'.csv', index=False)
     else:
-        df_idr = merge_noIDRs_pdbs(idrs_all_nopdb, df_idr, pdbs_overlap, min_eval, max_eval, PREF)
-        #df_idr = mark_overlap(df_idr, df_info_nopdb, pdbs_overlap, pdbs_short, PREF)
+        df_idr = merge_noIDRs_pdbs(idrs_all_nopdb, df_idr, pdbs_overlap, min_eval, max_eval, prefix)
+        #df_idr = mark_overlap(df_idr, df_info_nopdb, pdbs_overlap, pdbs_short, prefix)
         
-    return idrs_all_nopdb, pdbs_overlap, pdbs_short, df_idr
+    return df_idr, idrs_all_nopdb, pdbs_overlap, pdbs_short
 
 
-def merge_idr_pdb(idrs_path, pdb_path, file_names):
+def mark_no_homologs(basis_path, df_idr, save_name):
+    df_idr.loc[df_idr['removed_on_s'].isna(), 'removed_on_s'] = 'e_no_homology'
+    df_idr.loc[df_idr['removed_on'].isna(), 'removed_on'] = 'No Homology'
+    df_idr.to_csv(basis_path+save_name, index=False)
+    return(df_idr)
+
+
+def merge_idr_pdb(idrs_path, pdb_path, file_names, cutoff):
     # This process can take several minutes to run.
     
-    basis_path = resources.get_dir(pdb_path)
+    basis_path = resources.get_dir(pdb_path)+"/"+resources.get_filename(pdb_path)+"_"
     
     # Not sure if the separators can be adjusted in the blast file
     sep1 = "|"
@@ -633,7 +640,18 @@ def merge_idr_pdb(idrs_path, pdb_path, file_names):
     
     df_idr = pd.read_csv(idrs_path)
     
-    # Replicating the PDBs and IDRs to extract Positions, E-value and unique IDSs
+    # Replicating the PDBs and IDRs to extract Positions, E-value and unique IDSs an all other relevant alignment data
     idx_million = positions2array(df_idr, blast_pickle, (0,8,9), ['idr_start', 'idr_end'], pickle_sz, 'starts_ends')
     get_another_data(df_idr, blast_pickle, idx_million, (0,1,2,5,6,4,10,11,12,7,14,15,16,8,9), 
                                    ['idr_name', 'idr_size'], pickle_sz, (1,1), file_names)
+    
+    if len(file_names)==5:
+        file_names.insert(0, 'starts_ends')
+    
+    # We started running for less significant e-values too, but data proved not relevant
+    # So we dropped the other e-values: 0.01 (maybe significant) and 10 (not significant).
+    # Check the function to know details about the other files. They were created for validation purposes
+    df_idr_new, _, _, _ = generate_all_dfs(basis_path, df_idr, None, 10e-05, "idr", cutoff, False, file_names)
+    # Run the same process passing df_idr_new as 2nd parameter to add less significant alignments.
+    # If they are not relevant, you may consider add the significance paramenter to local blast to improve performance.
+    df_idr_new = mark_no_homologs(basis_path, df_idr_new, 'EVAL_data_noSeqs_idr.csv')

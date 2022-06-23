@@ -55,9 +55,10 @@ def extract_polyXY_features(polyXY_path, fasta_data, tp=2):
         for line in enumerate(handle):
             rowsplit = line[1].rstrip("\n").split("\t")
             uniprot_id = rowsplit[0].split("|")[1]
-            seq_aa = fasta_data[uniprot_id][0]
+            seq_val = fasta_data[uniprot_id]
+            seq_aa = str(seq_val.seq)
             seq_len = len(seq_aa)
-            seq_desc = fasta_data[uniprot_id][1]
+            seq_desc = seq_val.description
             if uniprot_id!=old_id:
                 i=1
             else:

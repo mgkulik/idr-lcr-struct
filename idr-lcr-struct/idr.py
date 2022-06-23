@@ -148,7 +148,7 @@ def extract_idrs(tab_path, fasta_data, error_path=''):
                     error_lst = error_lst + error_seq
                 # Getting sequence info to generate fastas from the sequences with IDRs
                 seq_lst.append(seq_val)
-                seq_idr_lens = seq_idr_lens+len(seq_val)
+                seq_idr_lens = seq_idr_lens+len(seq_val[0])
             except Exception as e:
                 # Errors happen when the fasta file does not have the IDs provided
                 # by MobiDB. Two major reasons are obsolete entry or IDR annotated
@@ -208,7 +208,7 @@ def get_score2regions(pd_idrs, tabidr_path, tsh=.5, kmer=20):
 def run_all(fastaname, tabidr_path, use_toolscores=False):
 
     idr_min_sz=20
-    fasta_data, seq_count_group, tot_lens = resources.read_fasta(fastaname, False)
+    fasta_data, seq_count_group, tot_lens = resources.read_fasta(fastaname)
     error_path = resources.gen_filename(tabidr_path, "mobidb", "idr", "err")
     seq_lst, seq_idr_lens, idrs_info, error_lst = extract_idrs(tabidr_path, fasta_data, error_path)
     

@@ -23,6 +23,20 @@ AA_GROUPS_NAMES = ['Polar Uncharged', 'Non-Polar', 'Polar Basic', 'Polar Acidic'
 AA_GROUPS2 = [[19,8,16,17,5,3,6,22,12,2,9,4,7], [14,18,1,15,20,11,10,13,21]]
 AA_GROUPS2_NAMES = ['Polar', 'Non-Polar']
 
+def check_uniprot_name(name):
+    ''' Simple name check to make sure a proteome name was provided and that
+    all files start with the proteome name. '''
+    name = name.split("_")[0]
+    return name[0:2] and name[2:].isnumeric() and len(name)==11
+
+
+def valid_file(filename, path):
+    comp_path = os.path.join(path, filename)
+    assert(check_uniprot_name(filename)), "All file names must start with the uniprot proteome ID: UN00XXXXXXXX (2 letters and 9 numbers)."
+    assert(os.path.isfile(comp_path)), "Provide a filename of an existent file in {0}!".format(path)
+    return comp_path
+
+
 def save_file(lst, path):
     ''' Save list to txt file '''
     with open(path, 'a') as file:
@@ -32,11 +46,14 @@ def save_file(lst, path):
 def get_dir(filename):
     return os.path.dirname(filename)
 
+def get_filename(filename):
+    return os.path.basename(filename).split('.')[0].split('_')[0]
+
 
 def gen_filename(filename, source, proc, ext):
     ''' Extracts the info from the source file name and generates a new file name.'''
     dir_name = get_dir(filename)
-    file_name = os.path.basename(filename).split('.')[0].split('_')[0]
+    file_name = get_filename(filename)
     sep = "_"
     if proc=="":
         sep = proc
@@ -50,7 +67,7 @@ def save_pickle(var, var_name, mode):
 
 def open_pickle(var_name, BASIS_PATH):
     objs = []
-    with open(BASIS_PATH+var_name, 'rb') as handle:
+    with open(BASIS_PATH+var_name+".pickle", 'rb') as handle:
         while 1:
             try:
                 objs.append(pickle.load(handle))
@@ -73,27 +90,37 @@ def get_seq_ints(seq):
     return seq_by_group
 
 
-def read_fasta(fastaname, sep="|", s_type='seq', seq_ints=False):
+def read_fasta(fastaname, seq_ints=False):
     ''' Reads the fasta file and store the sequences and their int equivalents.
-    Counts AA by groups and total of residues of all proteome. '''
-    sz = get_filesize(fastaname, ">")
-    seqs_by_group = np.zeros((sz,4))
+    Counts AA by groups and total of residues of all proteome. 
+    
+    Returns a SeqIO object to use later. '''
+    seqs_by_group = np.zeros((75777,4))
     fasta_data = dict()
     j=0
     seqs_len = 0
     for seq_record in SeqIO.parse(fastaname, 'fasta'):
-        name_seq = seq_record.id.split(sep)
-        if (s_type=='seq'):
-            name_seq = name_seq[1]
-        elif (s_type=='pdb'):
-            name_seq = name_seq[1]+'_'+name_seq[2]
-        fasta_data[name_seq] = [str(seq_record.seq), seq_record.description]
+        fasta_data[seq_record.id.split('|')[1]] = seq_record
         seq_len = len(str(seq_record.seq))
         if seq_ints:
             seqs_by_group[j, :] = get_seq_ints(str(seq_record.seq))
             seqs_len = seqs_len + len(str(seq_record.seq))
         j+=1
     return fasta_data, seqs_by_group, seqs_len
+
+
+def load_seqs(path, sep="|", s_type='seq'):
+    '''Loads the sequence from the fasta file and returns a dictionary. '''
+    seq_dict = dict()
+    for seq_record in SeqIO.parse(path, 'fasta'):
+        name_seq = seq_record.id.split(sep)
+        if (s_type=='seq'):
+            name_seq = name_seq[1]
+        elif (s_type=='pdb'):
+            #name_seq = name_seq[1].upper()+'_'+name_seq[2].upper()
+            name_seq = name_seq[1]+'_'+name_seq[2]
+        seq_dict[name_seq] = [str(seq_record.seq), seq_record.description]
+    return seq_dict
 
 
 def save_fastas(seq_lst_comp, fastaout):
