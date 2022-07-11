@@ -36,13 +36,11 @@ blosum.update(((b,a),val) for (a,b),val in list(blosum.items()))
 blosum["U", "T"] = 0
 blosum["U", "C"] = 0
 
-#####  
-# Filtering only relevant IDR and PDB position data
-
-##### SUPPORT #####
-
+##### PART 1, EXTRACTING THE DATA FROM BASE FILES AND SAVING TO DISK #####
 
 def extract_blast_pairs(xml_path, pickle_sz, sep1, sep2):
+    ''' Gets the blastP xml results and generates pickle file with the 
+    overlaps data. '''
     
     pdb_filename = resources.gen_filename(xml_path, "blast", "", "pickle")
     
@@ -107,6 +105,7 @@ def extract_blast_pairs(xml_path, pickle_sz, sep1, sep2):
 
 
 def count_pdbs_by_eval(dt_pdb):
+    ''' Gets the number os different group counts to help on validation. '''
     sum_10e_05 = 0
     sum_001 = 0
     sum_10 = 0
@@ -285,9 +284,11 @@ def get_another_data(df_idr, pdb_path, idx_million, ids_pos=(0,1,2,5,6,4,10,11,1
     print("Extraction from blast pickle finished.")
     
 
-##### AUX get_all #####
+##### PART 2, CROSSING IDRS AND PDBs AND EXTRACTING ALL VIABLE COMBINATIONS #####
+    
+##### AUXILIARY FUNCTIONS get_all #####
 def define_overlaps(pos):
-    ''' Gets the start and end to the regions with overlaps and 0 to the ones 
+    ''' Gets the start and end to the regions with overlaps and set 0 to the ones 
     without them. '''
     #pos = np.array([[22,55,139,237], [40,73,64,96],[62,87,12,22], [64,96,73,82], [73,82,64,96], [64,96,40,73]])
     idx_mat = np.argsort(pos, axis=1)
@@ -305,7 +306,8 @@ def define_overlaps(pos):
 
 
 def filter_kept_idrs(idrs_removed, un_ids, starts_ends, idr_sizes, evalues, gen_info):
-    # Removing IDRs with overlaps in more restrict homologous group
+    ''' Removing IDRs with overlaps already assigned to a lower homology group. 
+    This action will both save memory and make sure no data be wrongly overlaped. '''
     if len(idrs_removed)>0:
         _, pdb_removed0, idx_all_un = np.unique(un_ids[:,1], return_index=True, return_inverse=True)
         _, pdb_removed1, _ = np.intersect1d(un_ids[:,1], idrs_removed, return_indices=True)
@@ -319,6 +321,11 @@ def filter_kept_idrs(idrs_removed, un_ids, starts_ends, idr_sizes, evalues, gen_
     
 
 def filter_no_pdb(df_idrs_dt, un_ids):
+    ''' Extracts a list of the IDRs with no overlap with PDB. 
+    Returns:
+        a_idrs_nopdb = list of unique IDR IDs with no alignment with PDB;
+        a_prots_nopdb = list of uniprot IDs with no overlap with PDB.
+    '''
     a_idrs_un = np.array(df_idrs_dt['seq_name'].unique().tolist())
     a_pdbs_un = np.unique(un_ids[:,0])
     a_seqs_notpdb = np.setdiff1d(a_idrs_un, a_pdbs_un)
@@ -329,6 +336,8 @@ def filter_no_pdb(df_idrs_dt, un_ids):
 #Control Q9BUP0 - short with long
 #Control Q92793 - short with some long
 def filter_no_overlap(df_idrs_dt,un_ids,pos_over,prefix):
+    ''' Filter the cases where homologous sequences were found, but the IDR
+    region did not overlap. '''
     # Unique IDR IDs with counts (they were doubled by the PDB occurrences)
     total_counts = np.unique(un_ids[:, 1], return_counts=True)
     # Unique IDR IDs with counts for the ones without overlaps
@@ -346,20 +355,23 @@ def filter_no_overlap(df_idrs_dt,un_ids,pos_over,prefix):
 
 
 def get_overlap_size(sz_over, idr_sizes):
-    #fact = sz_over>0
+    ''' Calculates the fraction of the region overlaped with a PDB sequence. '''
     over_perc = sz_over/idr_sizes
     return over_perc
 
 
 def extract_short_overlaps(sz_over, over_perc, cutoff=.5, min_sz=30):
-    '''Get the short overlaps bool list and the not long ones, to ensure no
-    short are selected if there are long ones in the same IDR.'''
+    ''' Get the short overlaps bool list and the not long ones, to ensure no
+    short are selected if there are long ones in the same IDR. Returns a boolean
+    array to use in the selection of the short and long ones. '''
     check_short = ((over_perc<cutoff)&(sz_over<min_sz)&(over_perc>0))
     check_long = (over_perc>0)&((sz_over>=min_sz)|(over_perc>=cutoff))
     return check_short, check_long
 
 
 def filter_short_overlaps(df_idrs_dt,un_ids,short_bool,long_bool,prefix):
+    ''' Filter the cases where homologous sequences were found, but the IDR
+    region had a short overlap. '''
     pdbs_long = np.unique(un_ids[long_bool, 1])
     short_over = np.unique(un_ids[short_bool, 1])
     short_over = short_over[~np.isin(short_over, pdbs_long)]
@@ -368,6 +380,12 @@ def filter_short_overlaps(df_idrs_dt,un_ids,short_bool,long_bool,prefix):
 
 
 def filter_overlaps(df_idrs_dt,un_ids,pos_over,starts_ends,evalues,gen_info,short_bool,long_bool,over_perc,sz_over,cols,prefix):
+    ''' Gets all the base data and filter the long and short overlaps. 
+    Outputs:
+        df_idrs_dt_over = The subset of the IDR dataframe with actual overlaps;
+        pdb_over = A dataframe with all data related to the PDB overlap;
+        pdb_short = A dataframe with all data related to short overlaps only (for validation purposes).
+    '''
     p_ids_all = un_ids[long_bool, :-1]
     p_posit_over = pos_over[long_bool, :]
     p_posit_orig = starts_ends[long_bool, :]
@@ -392,6 +410,7 @@ def filter_overlaps(df_idrs_dt,un_ids,pos_over,starts_ends,evalues,gen_info,shor
 
 
 def filter_evalue(evalues, evalue_min=None, evalue_max=10e-05):
+    ''' Cut the e-value array to keep just the rows in the e-value range. '''
     if evalue_min==None:
         eval_cut = evalues<=evalue_max
     else:
@@ -400,6 +419,9 @@ def filter_evalue(evalues, evalue_min=None, evalue_max=10e-05):
     
 
 def filter_pdb_array(arr_data, filtered_eval):
+    ''' Filter the data extracted from the pickle file to keep just the rows
+    in the selected e-value range.
+    '''
     if arr_data.ndim==1:
         filtered_arr = arr_data[filtered_eval]
     else:
@@ -408,6 +430,8 @@ def filter_pdb_array(arr_data, filtered_eval):
 
 
 def merge_noIDRs_pdbs(df_noPDB, df_idrs_dt, pdbs_overlap, min_eval, max_eval, prefix):
+    ''' Adds the PDB overlaps data to the IDR dataframe. '''
+    
     if max_eval==0.0001:
         smax_eval = 'b_10e-05'
         smax_eval_name = '10e-05'
@@ -433,7 +457,7 @@ def merge_noIDRs_pdbs(df_noPDB, df_idrs_dt, pdbs_overlap, min_eval, max_eval, pr
     for cols in cols2add[2:]:
         df_all_pdbs.loc[:, cols] = df_all_pdbs.loc[:, cols].astype(float)
     
-    # End up with more than a thousand alignments to some proteins. Filtering to 20
+    # End up with more than a thousand alignments to some proteins
     #df_all_pdbs = df_all_pdbs.sort_values(by=[prefix+'_name', 'over_perc','pdb_evalue', 'bitscore'], ascending=[True, False, True, False]).drop_duplicates(subset=[prefix+'_name'])
     df_all_pdbs = df_all_pdbs.sort_values(by=[prefix+'_name', 'over_perc','pdb_evalue', 'bitscore'], ascending=[True, False, True, False])
     # When I filtered to 20, in some cases all alignments where synthetic.
@@ -464,26 +488,8 @@ def merge_noIDRs_pdbs(df_noPDB, df_idrs_dt, pdbs_overlap, min_eval, max_eval, pr
     return df_idrs_dt
 
 
-def mark_overlap(df_idr, idrs_nopdb, pdbs_overlap, pdbs_short, prefix):
-    ids_noover = np.unique(idrs_nopdb.loc[:, prefix+'_name'])
-    check_noover = df_idr[prefix+'_name'].isin(ids_noover).values
-    idrs_pdb = np.unique(pdbs_overlap.loc[:, prefix+'_name'])
-    check_pdb = df_idr[prefix+'_name'].isin(idrs_pdb).values
-    idrs_short = np.unique(pdbs_short.loc[:, prefix+'_name'])
-    df_pdb = df_idr["pdb_name"].isna().values
-    check_short = df_idr[prefix+'_name'].isin(idrs_short).values
-    check_short = check_short&df_pdb
-    if not "with_pdb" in df_idr:
-        df_idr["with_pdb"] = ""
-    else:
-        df_idr.loc[(~check_noover)&(df_idr["with_pdb"]=="With Homologous"), "with_pdb"] = ""
-    df_idr.loc[check_noover, "with_pdb"] = "With Homologous"
-    df_idr.loc[check_short, "with_pdb"] = "Short Overlap"
-    df_idr.loc[check_pdb, "with_pdb"] = "Long Overlap"
-    return df_idr
-
-
 def group_min(groups, data):
+    ''' Extracts the minimum value by group from unsorted values. '''
     order = np.lexsort((data, groups))
     groups = groups[order]
     data = data[order]
@@ -494,6 +500,7 @@ def group_min(groups, data):
 
 
 def group_max(groups, data):
+    ''' Extracts the maximum value by group of unsorted values. '''
     order = np.lexsort((data, groups))
     groups = groups[order] #this is only needed if groups is unsorted
     data = data[order]
@@ -504,6 +511,8 @@ def group_max(groups, data):
 
 
 def eval_no_overlaps(over_perc, gen_info, starts_ends, un_ids, evalues, prefix):
+    ''' Generates some statistical analysis based on the cases without 
+    PDB overlaps to support further analysis. '''
     bool_nopdb = over_perc==0
     seq_lens = gen_info[bool_nopdb, 5].astype(int)
     evalues_pdb = evalues[bool_nopdb]
@@ -536,6 +545,10 @@ def eval_no_overlaps(over_perc, gen_info, starts_ends, un_ids, evalues, prefix):
     
 
 def report_sizes(idrs_nopdb, idrs_nooverlap, idrs_shortoverlap, df_idrs_dt, prots_nopdb, idrs_all_nopdb, evals):
+    ''' A simple report just to give us an overview of how many overlaps actually
+    happened. The idea is that the information about the cases without homologous
+    at all can be usefull. The counts are on each iteration, however, not for 
+    all e-values at once. '''
     print()
     print('Evalues equal/smaller than {0}: '.format(evals))
     print('Total IDRs: {0}'.format(len(df_idrs_dt)))
@@ -557,42 +570,92 @@ def report_sizes(idrs_nopdb, idrs_nooverlap, idrs_shortoverlap, df_idrs_dt, prot
     print()
 
 ##### FUNC get_all #####
-def generate_all_dfs(basis_path, df_idr, min_eval, max_eval, prefix, cutoff=(.5,30), save=False, file_names=''):
+def generate_all_dfs(basis_path, df_idr, min_eval, max_eval, prefix="idr", cutoff=(.5,30), save=False, file_names=''):
+    ''' Extract the information of the pair IDR/PDB and add to a global dataframe
+    
+    Inputs:
+        basis_path = path where the pickle files are saved;
+        df_idr = dataframe with all the available IDR data. New columns will be added
+                to this dataframe, returning a more complete file with overlaps info;
+        min_eval = minimum e-value for the round. The main goal is to make sure 
+                    that the IDRs with lower e-value get assigned again with an
+                    alignment to a PDB sequence with a higher e-value;
+        max_eval = maximum e-value for the round. The main goal is to make sure 
+                    that the IDRs with lower e-value get assigned again with an
+                    alignment to a PDB sequence with a higher e-value;
+        prefix = The function was designed to run over different kinds of input,
+                    as long as the pickle files got the proper starts-end positions
+                    informed, you can use any partition of the sequence, not only
+                    IDRs. The prefix define the names of the resulting columns,
+                    e.g. idr, poly, polyxy...
+        cutoff = Define the limits of the overlaps to give some flexibility for
+                    cases not 100% aligned. The default accepts 50% of overlap 
+                    up to a minimum of 30 amino acids. This criteria was defined
+                    based on the smallest size of an IDR in mobidb, 20 amino acids;
+        save = Additional validation files should be saved to disk?
+        file_names = List of names for the pickle files. An exact order must be
+                    respected to make sure the function works properly. Defined
+                    as a parameter because this files will be used several times
+                    in the future.
+                    
+    Outputs:
+        df_idr = The original IDR file with the extra overlapping columns. As we
+                need to perform an extra step to filter 1 PDB per IDR, this file
+                will still have several PDBs per IDR. We realized that somethimes 
+                the alignment would still bring IDRs overlaping complete missing 
+                regions with good e-value, so we moved the selection criteria 
+                for after we map the SS data and remove synthetic alignments as well;
+        idrs_all_nopdb = Original df_idr file with the cases with no overlap with
+                PDB or with overlaps shorter than cutoff. File generated for 
+                validation purposes;
+        pdbs_short = List of PDB alignments with short overlap with IDRs. This
+                cases are not available anywhere else after the filtering. File
+                generated for validation purposes;
+        idrs_overlap (save): List of IDRs with overlaps independently if they
+                are short or long;
+        df_info_nopdb (save): Statistical data related to the cases with no 
+                overlap to PDB (validation purposes).
+    '''
+    # Loading pickles from disk
     starts_ends = resources.open_pickle(file_names[0], basis_path)
     evalues = resources.open_pickle(file_names[1], basis_path)
     idr_sizes = resources.open_pickle(file_names[2], basis_path)
     un_ids = resources.open_pickle(file_names[3], basis_path)
     gen_info = resources.open_pickle(file_names[4], basis_path)
     
-    # Removing the IDRs with overlaps in the last iteration
+    # Removing the IDRs with overlaps in the last iteration our strategy appends
+    # the cases with overlaps in the iteration to the previous one
     if ('removed_on' in df_idr) and (not save):
         df_idr_filtered = df_idr.loc[df_idr['removed_on'].isna()]
         idrs_removed = df_idr.loc[~(df_idr['removed_on'].isna()), prefix+'_name'].unique()
         un_ids, starts_ends, idr_sizes, evalues, gen_info = filter_kept_idrs(idrs_removed, un_ids, starts_ends, idr_sizes, evalues, gen_info)
     else:
         df_idr_filtered = df_idr.copy()
-        
+    
+    # Filters the data extracted from pickles based on the e-value range
     pdb_qual = filter_evalue(evalues, min_eval, max_eval)
     starts_ends = filter_pdb_array(starts_ends, pdb_qual)
     un_ids = filter_pdb_array(un_ids, pdb_qual)
     idr_sizes = filter_pdb_array(idr_sizes, pdb_qual)
     evalues = filter_pdb_array(evalues, pdb_qual)
     gen_info = filter_pdb_array(gen_info, pdb_qual)
-    # Generating overlap information
+    # Generates overlap information
     pos_over, sz_over = define_overlaps(starts_ends)
     over_perc = get_overlap_size(sz_over, idr_sizes)
     short_bool, long_bool = extract_short_overlaps(sz_over, over_perc, cutoff[0], cutoff[1])
     #del locals()['starts_ends']
     
+    # Distinguish IDRs without homologs at all and the ones with short overlap
+    # from the cases that simply don't overlap
+    # These cases will be concatenated in one dataframe as not overlaped with 
+    # a column to use as a class.
     idrs_nopdb, prots_nopdb = filter_no_pdb(df_idr_filtered,un_ids)
     idrs_nopdb = idrs_nopdb.assign(pdb_type='No Homologs')
-    # Filtering IDRs without overlap
     idrs_nooverlap = filter_no_overlap(df_idr_filtered,un_ids,pos_over,prefix)
     idrs_nooverlap = idrs_nooverlap.assign(pdb_type='No Overlaps')
-    # Filter IDRs with short overlap - up to 5% coverage or 10 AA
+    # Filter IDRs with short overlap - up to 50% coverage or 10 AA
     idrs_shortoverlap = filter_short_overlaps(df_idr_filtered,un_ids,short_bool,long_bool, prefix)
     idrs_shortoverlap = idrs_shortoverlap.assign(pdb_type='Short Overlaps')
-    
     idrs_all_nopdb = pd.concat([idrs_nopdb, idrs_nooverlap, idrs_shortoverlap], ignore_index=True)
     
     # Filtering IDRs with long overlaps (for validation purposes)
@@ -607,24 +670,74 @@ def generate_all_dfs(basis_path, df_idr, min_eval, max_eval, prefix, cutoff=(.5,
         name = re.sub(r'\.', '-', str(max_eval))
         idrs_all_nopdb.to_csv(basis_path+'nopdb_all_'+prefix+'_'+name+'.csv', index=False)
         idrs_overlap.to_csv(basis_path+'df_over_'+prefix+'_'+name+'.csv', index=False)
-        pdbs_overlap.to_csv(basis_path+'df_overpdb_'+prefix+'_'+name+'.csv', index=False)
         pdbs_short.to_csv(basis_path+'df_shortpdb_'+prefix+'_'+name+'.csv', index=False)
         df_info_nopdb.to_csv(basis_path+'nopdb_info_'+prefix+'_'+name+'.csv', index=False)
     else:
         df_idr = merge_noIDRs_pdbs(idrs_all_nopdb, df_idr, pdbs_overlap, min_eval, max_eval, prefix)
-        #df_idr = mark_overlap(df_idr, df_info_nopdb, pdbs_overlap, pdbs_short, prefix)
         
-    return df_idr, idrs_all_nopdb, pdbs_overlap, pdbs_short
+    return df_idr, idrs_all_nopdb, pdbs_short
 
+##### PART 3, GETTING THE 2D STRUCTURE ANNOTATIONS AND FILTERING THE BEST IDR/PDB PAIRS #####
+
+##### Auxiliary functions
 
 def mark_no_homologs(basis_path, df_idr, save_name):
+    ''' Re-check to make sure the class of each filtering groups is properly 
+    assigned because this variable will be used to filter the significant 
+    alignemnts later'''
     df_idr.loc[df_idr['removed_on_s'].isna(), 'removed_on_s'] = 'e_no_homology'
     df_idr.loc[df_idr['removed_on'].isna(), 'removed_on'] = 'No Homology'
     df_idr.to_csv(basis_path+save_name, index=False)
     return(df_idr)
 
 
+def append_seq_details(seqs_path, df_idr_details):
+    ''' Gets additional sequence data that will be used on the 2D structure annotations.
+    This data could have being added before, but we just realized later on in the process
+    the need for it. Decided to add it when needed.'''
+    seq_dict = resources.load_seqs(seqs_path)
+    df_idr_details['seq_desc'] = df_idr_details["seq_name"].apply(lambda x: seq_dict[x][1])
+    df_idr_details['seq_aa'] = df_idr_details["seq_name"].apply(lambda x: seq_dict[x][0])
+    return df_idr_details
+
+
+def extract_pdb_sizes(ss_dict):
+    ''' Calculates the size of the complete PDB structure using just the PDB ID
+    and adding the sizes of individual chains. '''
+    dct_sizes = defaultdict(list)
+    for k, v in ss_dict.items():
+        dct_sizes[k.split("_")[0]].append(len(v[0]))
+    return pd.DataFrame.from_dict({key: sum(dct_sizes[key]) for key in dct_sizes}, columns=["pdb_all_size"], orient="index").reset_index().rename(columns={"index":"pdb_id"})
+
+
+def append_pdb_details(pdb_mask_path, df_idr_details):
+    ''' Gets additional PDB data that will be used on the 2D structure annotations.'''
+    ss_dict = resources.load_seqs(pdb_mask_path, "|", 'pdb')
+    pdb_sizes = extract_pdb_sizes(ss_dict)
+    df_idr_details["pdb_id"] = df_idr_details.pdb_name.str.split("_", n=1, expand=True)[0]
+    df_idr_details = pd.merge(df_idr_details, pdb_sizes, how="left", on="pdb_id")
+    df_idr_details['pdb_desc'] = df_idr_details["pdb_name"].apply(lambda x: ss_dict[x][1] if(str(x) != 'nan') else x)
+    df_idr_details['pdb_aa'] = df_idr_details["pdb_name"].apply(lambda x: ss_dict[x][0] if(str(x) != 'nan') else x)
+    df_idr_details['pdb_desc'] = df_idr_details['pdb_desc'].astype(str)
+    df_idr_details['pdb_size'] = df_idr_details["pdb_name"].apply(lambda x: len(ss_dict[x][0]) if(str(x) != 'nan') else x)
+    df_idr_details['over_perc_seq'] = round((df_idr_details["seq_end"]-df_idr_details["seq_start"])/df_idr_details["seq_len"], 2)
+    df_idr_details['over_perc_pdb'] = round((df_idr_details["pdb_end"]-df_idr_details["pdb_start"])/df_idr_details["pdb_size"], 2)
+    df_idr_details['over_dir'] = df_idr_details.apply(lambda x: -1 if x["seq_start"] > x[PREF+"_start"] else 1, axis=1)
+    return df_idr_details
+
+
+def append_ss_details(ssSeq_path, df_idr_details):
+    ''' Extract secondary structure data (SS) from the file in fasta format 
+    composed by 1 entry per sequence and 1 entry for the SS data. '''
+    ss_data, _, _, _ = resources.extract_ss(ssSeq_path)
+    df_idr_details['ss_seq'] = df_idr_details["pdb_name"].apply(lambda x: ss_data[x] if(str(x) != 'nan') else x)
+    return df_idr_details
+
+
+
+
 def merge_idr_pdb(idrs_path, pdb_path, file_names, cutoff):
+    ''' Parts 1 and 2 - Main function IDR-PDB, no filtering. '''
     # This process can take several minutes to run.
     
     basis_path = resources.get_dir(pdb_path)+"/"+resources.get_filename(pdb_path)+"_"
@@ -637,7 +750,6 @@ def merge_idr_pdb(idrs_path, pdb_path, file_names, cutoff):
     
     # Starting with the extraction of each blast pair from the xml file
     blast_pickle = extract_blast_pairs(pdb_path, pickle_sz, sep1, sep2)
-    
     df_idr = pd.read_csv(idrs_path)
     
     # Replicating the PDBs and IDRs to extract Positions, E-value and unique IDSs an all other relevant alignment data
@@ -650,8 +762,30 @@ def merge_idr_pdb(idrs_path, pdb_path, file_names, cutoff):
     
     # We started running for less significant e-values too, but data proved not relevant
     # So we dropped the other e-values: 0.01 (maybe significant) and 10 (not significant).
-    # Check the function to know details about the other files. They were created for validation purposes
-    df_idr_new, _, _, _ = generate_all_dfs(basis_path, df_idr, None, 10e-05, "idr", cutoff, False, file_names)
+    # Check the function to know details about the other outputs. They were created for validation purposes
+    df_idr_new, _, _ = generate_all_dfs(basis_path, df_idr, None, 10e-05, "idr", cutoff, False, file_names)
     # Run the same process passing df_idr_new as 2nd parameter to add less significant alignments.
-    # If they are not relevant, you may consider add the significance paramenter to local blast to improve performance.
+    # If they are not relevant, you may consider add the significance paramenter to local blast 
+    # to reduce the number of alignments and improve performance.
     df_idr_new = mark_no_homologs(basis_path, df_idr_new, 'EVAL_data_noSeqs_idr.csv')
+    
+
+def run_ss_annotation(idrs_path, pdb_mask_path, ssSeq_path):
+    ''' Parts 3 - Main function IDR-PDB, getting the 2D structure and selecting 
+    best candidate. '''
+    
+    basis_path = resources.get_dir(pdb_mask_path)+"/"+resources.get_filename(pdb_mask_path)+"_"
+    
+    if len(file_names)==5:
+        file_names.insert(0, 'starts_ends')
+        
+    df_idr_new = pd.read_csv(idrs_path)
+    # ===================== Get PDB overlaps proportions =====================
+    df_idr_details = append_pdb_details(pdb_mask_path, df_idr_new)
+    df_idr_details = append_ss_details(ssSeq_path, df_idr_details)
+    # ========================== Add seqs info ===============================
+    # Need to add sequence details first to validate the real sequence start/end
+    # position of the alignment later
+    df_idr_details = append_seq_details(seqs_path, df_idr_details)
+    df_idr_details, df_2D_idr, pdb_data = get_dssp_idr(dssp_path, basis_path+file_names[5], df_idr_details)
+    

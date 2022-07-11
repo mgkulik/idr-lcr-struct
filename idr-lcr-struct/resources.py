@@ -26,7 +26,7 @@ AA_GROUPS2_NAMES = ['Polar', 'Non-Polar']
 def check_uniprot_name(name):
     ''' Simple name check to make sure a proteome name was provided and that
     all files start with the proteome name. '''
-    name = name.split("_")[0]
+    name = name.split(".")[0].split("_")[0]
     return name[0:2] and name[2:].isnumeric() and len(name)==11
 
 
@@ -178,8 +178,38 @@ def get_idr_AAcomposition(idr_aa):
 
 
 def get_pairs(col1, col2):
+    ''' Reorder the poly pair identification to group the polyXYs composed of
+    the same amino acids, e.g. "EK" == "KE"
+    '''
     if AA_CODE_DICT[col1]<AA_CODE_DICT[col2]:
         val = col1+'|'+col2
     else:
         val = col2+'|'+col1
     return val
+
+
+def extract_ss(path_ss, sep="_", s_type="pdb"):
+    """Read the fasta file special for the secondary structure cases.
+    Here we have 1 entry with the sequence (sequence) and 1 with the secondary
+    structure labels (secstr).
+       **PS: Decided not to use the SeqIO function because it deletes the
+       white spaces from the dssp structures. """
+    ss_data = dict()
+    ss_seq = dict()
+    ss_keys = list()
+    ss_coords = dict()
+    for v, k in read_fasta(path_ss):
+        ss_comp = k.split(':')
+        ss_type = ss_comp[2]
+        ss_name = ss_comp[0]
+        if (s_type=="pdb"):
+            ss_name+=sep+ss_comp[1]
+        if (ss_type == 'secstr\n') or (ss_type == 'secstr'):
+            ss_data[ss_name] = v
+            ss_keys.append(ss_name)
+            if len(ss_comp)>3:
+                ss_coords[ss_name] = re.sub("coords=", "", ss_comp[3]).rstrip()
+        else:
+            ss_seq[ss_name] = v
+    ss_keys = np.array(ss_keys)
+    return ss_data, ss_keys, ss_seq, ss_coords

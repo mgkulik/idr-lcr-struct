@@ -114,7 +114,7 @@ if (int(num_sel)==0 or int(num_sel)==4):
         idr_details = os.path.join(comp_path, un_prot+"_mobidb_idr_details.csv")
      
     if not "blast_path" in locals_var:
-        blast_path = input("Provide the path for the blast XML file. \nIt must be available in the directory provided before and start with the Uniprot proteome ID:  ")   
+        blast_path = input("Provide the path for the blast XML file. \nIt must be available in the directory provided before and start with the Uniprot proteome ID: ")   
         blast_path = resources.valid_file(blast_path, comp_path)
     
     change_cut = input("The cut off values for IDRs overlapping PDB sequences are: 0.50 or 10 residues.\nDo you want to change it (0:No, 1:Yes)? ")
@@ -129,6 +129,15 @@ if (int(num_sel)==0 or int(num_sel)==4):
         assert(int(min_size_idr)>10), "Value must be higher than 10!"
     
     idrPdb.merge_idr_pdb(idr_details, blast_path, file_names, (cutoff_idr, min_size_idr))
+    
+    if not "pdb_mask_path" in locals_var:
+        pdb_mask_path = os.path.join(comp_path, "2021_12_06_pdb_seqres_masked.txt")
+    
+    if not "ssSeq_path" in local_var:
+        ssSeq_path = os.path.join(comp_path, "2021_12_06_pdb_ss_final.txt")
+        
+    if not "dssp_path" in local_var:
+        dssp_path = os.path.join(comp_path, "2021_12_06_sswith_mask.pickle")
     
     
 else:
