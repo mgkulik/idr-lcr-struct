@@ -9,6 +9,7 @@ Collection of auxiliary functions used by several source codes.
 """
 import os
 import pickle
+import csv
 from Bio import SeqIO
 import numpy as np
 import pandas as pd
@@ -38,10 +39,15 @@ def valid_file(filename, path):
 
 
 def save_file(lst, path):
-    ''' Save list to txt file '''
+    ''' Save list to txt file with no separator. '''
     with open(path, 'a') as file:
         for data in lst:
           file.write(data)
+
+def save_sep_file(lst, path):
+    with open(path, 'w') as myfile:
+        wr = csv.writer(myfile)
+        wr.writerow(lst)
 
 def get_dir(filename):
     return os.path.dirname(filename)
