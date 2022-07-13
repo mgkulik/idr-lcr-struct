@@ -47,7 +47,7 @@ def save_file(lst, path):
 def save_sep_file(lst, path):
     with open(path, 'w') as myfile:
         wr = csv.writer(myfile)
-        wr.writerow(lst)
+        wr.writerow(lst+["\n"])
 
 def get_dir(filename):
     return os.path.dirname(filename)
