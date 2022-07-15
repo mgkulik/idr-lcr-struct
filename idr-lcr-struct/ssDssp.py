@@ -17,7 +17,7 @@ import math
 import re
 import gzip, shutil, pickle, time
 
-import os, subprocess, shlex
+import os, subprocess, shlex, requests
 from datetime import datetime
 
 import resources
@@ -25,6 +25,7 @@ import resources
 path_seqres = "/home/magoncal/Documents/data/projects/poly_cook/2022_07_11_pdb_seqres.txt"
 path_pdb_files = "/home/magoncal/Documents/data/projects/idr_cook/pdb_files_missing_ss"
 path_masked = "/home/magoncal/Documents/data/projects/poly_cook/2021_12_06_pdb_seqres_masked.txt"
+path_ss_file = "/home/magoncal/Documents/data/projects/poly_cook/2021_12_06_pdb_ss_final.txt"
 
 
 def download_seqs_file():
@@ -123,7 +124,8 @@ def manage_missing(path_pdb_files, missing_ids, file_name, del_prev=False):
     # Save missing files to disk, so the .sh provided by PDB can run over all 
     # downloads at once.
     missing = list(select_target(path_pdb_files, missing_ids, False))
-    resources.save_sep_file(missing, file_name)
+    if len(missing) > 0:
+        resources.save_sep_file(missing, file_name)
     prev_miss = len(missing)
     file_type = "-p"
     i = 0
@@ -146,9 +148,41 @@ def manage_missing(path_pdb_files, missing_ids, file_name, del_prev=False):
     print()
     tot_in_sec = time.time() - start_time
     print("--- %s seconds ---" % (tot_in_sec))
-    os.remove(file_name)
+    if (i>0):
+        os.remove(file_name)
     missing = list(select_target(path_pdb_files, missing_ids, False))
     return missing
+
+
+def extract_from_gz(name, comppath):
+    error = ""
+    try:
+        with gzip.open(name, 'r') as f_in, open(comppath, 'wb') as f_out:
+            shutil.copyfileobj(f_in, f_out)
+    except Exception as e:
+        error = [base, type(e).__name__+ " - " + e.args[0]]
+    return error
+    
+
+def get_one_pdb(base, ext, comppath):
+    ''' Download again the PDB file. Needed when the download failed to save
+    the correct pdb file to disk. '''
+    # Deleting old files
+    try:
+        os.remove(comppath)
+    except Exception:
+        pass # If it can't delete it can move on.
+    simpl_path = os.path.dirname(comppath).replace("/temp", "")
+    simpl_path_file = os.path.join(simpl_path, base)+"."+ext+".gz"
+    os.remove(simpl_path_file)
+    
+    # Downloading new one
+    url = "https://files.rcsb.org/download/"+base+"."+ext+".gz"
+    response = requests.get(url)
+    open(simpl_path_file, "wb").write(response.content)
+    
+    # Extract from gz
+    extract_from_gz(simpl_path_file, comppath)
 
 
 def get_alignment(seq1, seq2, ma=2, nma=-1, og=-0.5, eg=-0.1):
@@ -178,9 +212,10 @@ def get_ss_string(chain_part, base, seqres_data):
     return new_lst
 
 
-def get_dssp_missing(comppath, base, seqres_data, un_pdb_ids):
+def get_dssp_missing(comppath, base, seqres_data, un_pdb_names):
     ext = os.path.splitext(os.path.basename(comppath))[1].replace(".", "")
     ss_new_lst, error_lst = list(), list()
+    eof=False
     try:
         if (ext=="pdb"):
             pdb_parser = PDBParser(QUIET=True)
@@ -202,23 +237,25 @@ def get_dssp_missing(comppath, base, seqres_data, un_pdb_ids):
         ss_chain_end = np.append(ss_chain_start[1:]-1, len(ss_vals)-1)
         for j in range(len(ss_chain_end)):
             chain_name = base+"_"+ss_vals[ss_chain_start[j], 1]
-            if (un_pdb_ids is None) or (chain_name in un_pdb_ids): 
+            if (len(un_pdb_names)==0 or (chain_name in un_pdb_names)): 
                 chain_part = ss_vals[ss_chain_start[j]:ss_chain_end[j]+1, :]
                 ss_new_lst = ss_new_lst+get_ss_string(chain_part, base, seqres_data)
             else:
                 error_lst.append([chain_name, 'not a target'])
+    except EOFError:
+        eof=True
     except Exception as e:
         error_lst.append([base, type(e).__name__+ " - " + e.args[0]])
-    return ss_new_lst, error_lst
+    return ss_new_lst, error_lst, eof
 
 
-def annotate_missing(path_selected, seqres_data, un_pdb_ids):
+def annotate_missing(path_selected, seqres_data, un_pdb_ids, un_pdb_names=[]):
     ''' Generate the DSSP mask for the selected sequences. '''
     # Getting the complete path from the target files
     sel_files = select_target(path_selected, un_pdb_ids)
         
     ss_lst, error_lst = list(), list()
-    temp_path = path_selected+'temp/'
+    temp_path = os.path.join(path_selected, 'temp')
     try:
         if not os.path.exists(temp_path):
             os.makedirs(temp_path)
@@ -229,17 +266,19 @@ def annotate_missing(path_selected, seqres_data, un_pdb_ids):
     for name in sel_files:
         basename = os.path.splitext(os.path.basename(name))[0]
         base = os.path.splitext(basename)[0]
-        comppath = temp_path+basename
-        try:
-            with gzip.open(name, 'r') as f_in, open(comppath, 'wb') as f_out:
-                shutil.copyfileobj(f_in, f_out)
-        except Exception as e:
-            error_lst.append([base, type(e).__name__+ " - " + e.args[0]])
-        ss_new, error_val = get_dssp_missing(comppath, base, seqres_data, un_pdb_ids)
+        comppath = os.path.join(temp_path, basename)
+        error_val = extract_from_gz(name, comppath)
+        if len(error_val):
+            error_lst.append(error_val)
+        ss_new, error_val, eof = get_dssp_missing(comppath, base, seqres_data, un_pdb_names)
+        if eof: # Deals with broken downloads
+            get_one_pdb(base, ext, comppath)
+            ss_new, error_val, eof = get_dssp_missing(comppath, base, seqres_data, un_pdb_names)
         error_lst = error_lst + error_val
         ss_lst = ss_lst + ss_new
         i+=1
         if (i%100==0):
+            print()
             print("{0}% processed {1} seconds".format(str(round((i/len(sel_files)*100), 3)), str(time.time() - start_time)))
     try:
         shutil.rmtree(temp_path)
@@ -249,14 +288,95 @@ def annotate_missing(path_selected, seqres_data, un_pdb_ids):
     return ss_lst, error_lst
 
 
+    def extract_ss(path_ss, sep="_", s_type="pdb"):
+        """Read the fasta file with the two dinstinct types of data (seq and SS)
+           **PS: Decided not to use the SeqIO function because it deletes the
+           white spaces from the dssp structures."""
+        ss_data = dict()
+        ss_seq = dict()
+        ss_keys = list()
+        ss_coords = dict()
+        for v, k in read_fasta(path_ss):
+            ss_comp = k.split(':')
+            ss_type = ss_comp[2]
+            ss_name = ss_comp[0]
+            if (s_type=="pdb"):
+                ss_name+=sep+ss_comp[1]
+            if (ss_type == 'secstr\n') or (ss_type == 'secstr'):
+                ss_data[ss_name] = v
+                ss_keys.append(ss_name)
+                if len(ss_comp)>3:
+                    ss_coords[ss_name] = re.sub("coords=", "", ss_comp[3]).rstrip()
+            else:
+                ss_seq[ss_name] = v
+        ss_keys = np.array(ss_keys)
+        return ss_data, ss_keys, ss_seq, ss_coords
+    
+    
+def remove_obsoletes(seqres_keys, ss_keys, ss_data, ss_seq, path_new_ss):
+    ''' Create a new multifasta with seqs and ss that should be kept,
+    dealing with the obsolete entries from PDB. '''
+    ss_obsolete = np.setdiff1d(ss_keys, seqres_keys)
+    ss_keep = np.setdiff1d(ss_keys, ss_obsolete)
+    with open(path_new_ss, 'w') as newfile:
+        for n in ss_keep:
+            seq_name = re.sub('_', ':', n)
+            newfile.write('>'+seq_name+':sequence\n')
+            newfile.write(wrap_line(ss_seq[n],75))
+            newfile.write('>'+seq_name+':secstr\n')
+            newfile.write(wrap_line(ss_data[n],75))
+            
+
+def append_ss_tofasta(ss_fasta, path_new_ss):
+    with open(dst, 'a+') as newfile:
+        for l in ss_fasta:
+            k = list(l.keys())[0]
+            newfile.write('>'+ k +'\n')
+            newfile.write(wrap_line(l[k],75))
+            
+            
+def generate_masked_fasta(path_ss, seqres_desc, ori_name, ss_name, kmer=20):
+    struct2D = dict() 
+    div_name = path_ss.split(".")
+    path_new_ss = div_name[0]+"_"+ori_name+"."+div_name[1]
+    path_masked_ss = div_name[0]+"_"+ss_name+"."+div_name[1]
+    ss_data, _, ss_seq, ss_coords = extract_ss(path_new_ss)
+    with open(path_masked_ss, 'w') as newfile:
+        for k in ss_data.keys():
+            seq_name = re.sub('_', '|', k)
+            new_seq, new_2Dstr, start_end = mask_seq(ss_data[k], ss_seq[k], kmer)
+            newfile.write('>pdb|'+seq_name+' '+seqres_desc[k]+'\n')
+            newfile.write(wrap_line(new_seq,75))
+            coords=""
+            if k in ss_coords:
+                coords=ss_coords[k]
+            struct2D[k] = [new_2Dstr, start_end, coords]
+    return struct2D
+
+
 
 def main(comp_path):
+    date_start = datetime.today().strftime('%Y%m%d')
     seqres_data, seqres_keys, seqres_desc, seqres_fnb = extract_seqres(path_seqres)
     missing_names, missing_ids, obsolete_names = get_missing_names(seqres_keys, path_masked)
     file_name = os.path.join(path_pdb_files, "missing_pdbs.txt")
     missing = manage_missing(path_pdb_files, missing_ids, file_name)
     if len(missing)>0:
-        file_name = os.path.join(comp_path, datetime.today().strftime('%Y%m%d')+"_missing_pdbs_log.txt")
+        file_name = os.path.join(comp_path, date_start+"_missing_pdbs_log.txt")
         resources.save_sep_file(missing, file_name)
         print("ATENTION: There are still some PDB/CIF files we were not able to download.\nCheck the file missing_pdbs_log and try to download them manually.\nWe will move on now considering the files available on disk!")
-    ss2append, errors_dssp = annotate_missing(path_pdb_files, seqres_data, missing_ids)
+        ss2append, errors_dssp = annotate_missing(path_pdb_files, seqres_data, missing_ids)
+        file_name = os.path.join(comp_path, date_start+"_pdbs.pickle")
+        resources.save_pickle(ss2append, file_name, 'wb')
+    
+    ss_data, ss_keys, ss_seq, _ = extract_ss(path_ss_file)
+    
+    if len(obsolete_names)>0:
+        file_new_ss = os.path.join(comp_path, date_start+"_pdb_ss_final.txt")
+        remove_obsoletes(seqres_keys, ss_keys, ss_data, ss_seq, file_new_ss)
+    
+    if len(missing_ids)>0:
+        append_ss_tofasta(ss2append, file_new_ss)
+        struct2D = generate_masked_fasta(path_ss_new, seqres_desc, "missing", "masked_missing", 20)
+        file_new_masked = os.path.join(comp_path, date_start+"_pdb_seqres_masked.txt")
+        resources.save_pickle(struct2D, file_new_masked, 'wb')

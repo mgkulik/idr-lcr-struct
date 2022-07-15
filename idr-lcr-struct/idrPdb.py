@@ -88,7 +88,7 @@ def extract_blast_pairs(xml_path, pickle_sz, sep1, sep2):
                                     mode = 'wb'
                                 else:
                                     mode = 'ab'
-                                resources.save_pickle(dt_pdb, pdb_filename)
+                                resources.save_pickle(dt_pdb, pdb_filename, mode)
                                 dt_pdb = dict()
                         hsps.clear()
                 hit_child.clear()
