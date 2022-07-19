@@ -44,13 +44,25 @@ def save_file(lst, path):
         for data in lst:
           file.write(data)
 
-def save_sep_file(lst, path):
-    with open(path, 'w') as myfile:
-        wr = csv.writer(myfile)
-        wr.writerow(lst+["\n"])
+def save_sep_file(lst, path, nrow="", sep=","):
+    ''' Save a file with delimiter using csv structure from a simple list. 
+    PS: I needed to add a row delimiter rdel option to the end of the file because
+    PDB batch_download.sh doesn't with the last ID. '''
+    with open(path, 'w', newline="") as myfile:
+        wr = csv.writer(myfile, delimiter=sep)
+        wr.writerow(lst+[nrow])
+
+
+def save_sep_llists(lst, path, sep=","):
+    ''' Save a file with delimiter using csv structure from a list of lists. '''
+    with open(path, 'w', newline="") as myfile:
+        wr = csv.writer(myfile, delimiter="\t")
+        wr.writerows(lst)
+
 
 def get_dir(filename):
     return os.path.dirname(filename)
+
 
 def get_filename(filename):
     return os.path.basename(filename).split('.')[0].split('_')[0]

@@ -782,6 +782,7 @@ def run_ss_annotation(idrs_path, pdb_mask_path, ssSeq_path):
     df_idr_new = pd.read_csv(idrs_path)
     # ===================== Get PDB overlaps proportions =====================
     df_idr_details = append_pdb_details(pdb_mask_path, df_idr_new)
+    # Important, the ss fasta is unordered. ALWAYS us it through key selection from the dictionary.
     df_idr_details = append_ss_details(ssSeq_path, df_idr_details)
     # ========================== Add seqs info ===============================
     # Need to add sequence details first to validate the real sequence start/end
