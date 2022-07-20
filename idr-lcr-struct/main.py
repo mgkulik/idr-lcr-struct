@@ -17,7 +17,7 @@ import poly
 import idrPdb
 import resources
 
-seq = [0,5]
+seq = [0,6]
 file_names=['evalues_idrs', 'idr_sizes', 'unique_ids', 'gen_info', 'blast_over']
 locals_var =  locals()
 
@@ -32,7 +32,7 @@ if not "comp_path" in locals_var:
     
 
 print("Please define what step of the process you wish to execute:")
-print("0: Execute all steps;\n1: Extract IDRs from MOBIDB;\n2: Generate IDR additional data;\n3: Generate PolyX/Ys additional data;\n4: Cross IDRs with PDB sequences;\n5: Cross Polys with PDB sequences.")
+print("0: Execute all steps;\n1: Extract IDRs from MOBIDB;\n2: Generate IDR additional data;\n3: Generate PolyX/Ys additional data;\n4: Cross IDRs with PDB sequences;\n5: Cross Polys with PDB sequences.\n6: Generate masked PDB sequnces and 2D:")
 num_sel = input("Select a number according with description above ({0}-{1}): ".format(str(seq[0]), str(seq[1])))
 assert(num_sel.isnumeric()), "Enter a number between {0} and {21}!".format(str(seq[0]), str(seq[1]))
 assert(int(num_sel)>=seq[0] and int(num_sel)<=seq[1]), "Enter a number between {0} and {1}!".format(str(seq[0]), str(seq[1]))
@@ -140,5 +140,35 @@ if (int(num_sel)==0 or int(num_sel)==4):
         dssp_path = os.path.join(comp_path, "2021_12_06_sswith_mask.pickle")
     
     
-else:
-    pass
+if int(num_sel)==6:
+    ''' Download the newest list of PDB sequences, PDB/CIF files, annotate
+    2D structures with DSSP and generate the masked file of PDB sequences based 
+    on the missing residues. '''
+    
+    if not pdb_seq_url in locals_var:
+        pdb_seq_url = "https://ftp.wwpdb.org/pub/pdb/derived_data/pdb_seqres.txt.gz"
+        check = input(("The current URL to download the PDB sequences is: {0}. Do you want to change it (y/n)?".format(pdb_seq_url))
+        assert(str(check).upper()!="Y" or str(check).upper()!="N"), "y for yes and n for no!"
+        if check.upper()=="Y":
+            pdb_seq_url = input("New URL: ")
+    
+    if not path_pdb_files in locals_var:
+        path_pdb_files = os.path.join(comp_path, "pdb_files")
+        
+    pdb_dir = os.path.join(comp_path, "pdb")
+    if ~os.path.exists(pdb_dir):
+        os.mkdir(pdb_dir)
+    
+    files = sorted([f.path for f in os.scandir(pdb_dir) if os.path.isfile(f)])
+        
+    if not path_masked in locals_var:
+        if any(s.endswith('_pdb_masked.txt') for s in files):
+            path_masked = sorted((f for f in files if f.endswith('_pdb_masked.txt')))[0]
+        else:
+            print("No previous mask file located in the pdb folder.\nPlease confirm it, otherwise all PDB files will be downloaded.")
+        
+    if not path_ss_file in locals_var:
+        if any(s.endswith('_pdb_masked.txt') for s in files):
+            path_ss_file = sorted((f for f in files if f.endswith('_pdb_ss_final.txt')))[0]
+        else:
+            print("No previous mask file located in the pdb folder.\nPlease confirm it, otherwise all PDB files will be re-annotated with DSSP.")
