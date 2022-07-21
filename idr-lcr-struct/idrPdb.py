@@ -734,8 +734,6 @@ def append_ss_details(ssSeq_path, df_idr_details):
     return df_idr_details
 
 
-
-
 def merge_idr_pdb(idrs_path, pdb_path, file_names, cutoff):
     ''' Parts 1 and 2 - Main function IDR-PDB, no filtering. '''
     # This process can take several minutes to run.
@@ -748,12 +746,20 @@ def merge_idr_pdb(idrs_path, pdb_path, file_names, cutoff):
     # Dumping numpy objects to disk to save memory
     pickle_sz=10e+05
     
+    print()
+    print("Making the XML file provided by blastP easier to my use...")    
     # Starting with the extraction of each blast pair from the xml file
     blast_pickle = extract_blast_pairs(pdb_path, pickle_sz, sep1, sep2)
     df_idr = pd.read_csv(idrs_path)
     
     # Replicating the PDBs and IDRs to extract Positions, E-value and unique IDSs an all other relevant alignment data
+    print()
+    print("Taking the starts and ends of the matches from the blastP output.")
+    
     idx_million = positions2array(df_idr, blast_pickle, (0,8,9), ['idr_start', 'idr_end'], pickle_sz, 'starts_ends')
+    
+    print()
+    print("Taking the rest of the thingies I need to use from blastP output.")
     get_another_data(df_idr, blast_pickle, idx_million, (0,1,2,5,6,4,10,11,12,7,14,15,16,8,9), 
                                    ['idr_name', 'idr_size'], pickle_sz, (1,1), file_names)
     
@@ -767,14 +773,16 @@ def merge_idr_pdb(idrs_path, pdb_path, file_names, cutoff):
     # Run the same process passing df_idr_new as 2nd parameter to add less significant alignments.
     # If they are not relevant, you may consider add the significance paramenter to local blast 
     # to reduce the number of alignments and improve performance.
-    df_idr_new = mark_no_homologs(basis_path, df_idr_new, 'EVAL_data_noSeqs_idr.csv')
+    eval_file = 'EVAL_data_noSeqs_idr.csv'
+    df_idr_new = mark_no_homologs(basis_path, df_idr_new, eval_file)
+    return os.path.join(basis_path, eval_file)
     
 
-def run_ss_annotation(idrs_path, pdb_mask_path, ssSeq_path):
+def run_ss_annotation(idrs_path, path_pdb_files, pdb_mask_path, ssSeq_path, path_seqs_pdb, save_dup=True):
     ''' Parts 3 - Main function IDR-PDB, getting the 2D structure and selecting 
     best candidate. '''
     
-    basis_path = resources.get_dir(pdb_mask_path)+"/"+resources.get_filename(pdb_mask_path)+"_"
+    basis_path = resources.get_dir(idrs_path)+"/"+resources.get_filename(idrs_path)+"_"
     
     if len(file_names)==5:
         file_names.insert(0, 'starts_ends')
@@ -789,4 +797,15 @@ def run_ss_annotation(idrs_path, pdb_mask_path, ssSeq_path):
     # position of the alignment later
     df_idr_details = append_seq_details(seqs_path, df_idr_details)
     df_idr_details, df_2D_idr, pdb_data = get_dssp_idr(dssp_path, basis_path+file_names[5], df_idr_details)
+    file_dup_idr, file_dup_ss, file_dup_pdb = [], [], []
+    
+    if save_dup:
+        file_dup_idr = basis_path+'data_dup_all.csv'
+        df_idr_details.to_csv(file_dup_idr, index=False)
+        file_dup_ss = basis_path+'data_dup_ss.csv'
+        df_2D_idr.to_csv(file_dup_ss, index=False)
+        file_dup_pdb = basis_path+'data_dup_pdb.csv'
+        pdb_data.to_csv(file_dup_pdb, index=False)
+    
+    
     
