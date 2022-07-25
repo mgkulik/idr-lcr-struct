@@ -76,6 +76,10 @@ if int(num_sel)==0:
     if not "path_ss_file" in locals_var:
         message = "No previous 2D structures file located in the pdb folder.\nPlease confirm it, otherwise all PDB files will be downloaded.\\(your process will run for several days)."
         path_ss_file = resources.get_pdbOut_names(files, '_pdb_ss_final.txt', message)
+        
+    if not "pdb_det_path" in locals_var:
+        message = "No PDB details file located in the pdb folder.\nPlease confirm it, otherwise the step to extract extra information from PDB files can take up to an hour."
+        pdb_det_path = resources.get_pdbOut_names(pdb_files, '_pdb_details.csv.csv', message)
 
 
 if (int(num_sel)==1 or int(num_sel)==2):
@@ -101,8 +105,8 @@ if (int(num_sel)==1 or int(num_sel)==3):
     if not "tab_idr" in locals_var:
         tab_idr = os.path.join(comp_path_un, un_prot+"_mobidb_idr.tab")
     
-    idr_details, idr_fasta = idr.run_all(path_fasta, tab_idr)
-    print("\nFiltered fasta ({0}) and IDR details ({1}) were saved to disk.".format(os.path.basename(idr_fasta), os.path.basename(idr_details)))
+    idr_details, idr_fasta_path = idr.run_all(path_fasta, tab_idr)
+    print("\nFiltered fasta ({0}) and IDR details ({1}) were saved to disk.".format(os.path.basename(idr_fasta_path), os.path.basename(idr_details)))
 
 
 if (int(num_sel)==1 or int(num_sel)==4):
@@ -169,21 +173,28 @@ if (int(num_sel)==1 or int(num_sel)==5):
         min_size_idr = input("Define new accepted minimum of residues (e.g. 10): ")
         assert(min_size_idr.isnumeric()), "Value must be higher than 10!"
         assert(int(min_size_idr)>10), "Value must be higher than 10!"
-    
-    idrs_path = idrPdb.merge_idr_pdb(idr_details, blast_path, file_names, (cutoff_idr, min_size_idr))
-    
+        
     pdb_files = resources.get_pdb_directory(comp_path)
     
-    if not "path_masked" in locals_var:
+    if not "pdb_mask_path" in locals_var:
         message = "No previous masked file located in the pdb folder.\nYou can't execute this step before execute step 0."
-        path_masked = resources.get_pdbOut_names(pdb_files, '_pdb_masked.txt', message)
+        pdb_mask_path = resources.get_pdbOut_names(pdb_files, '_pdb_masked.txt', message)
     
-    if not "path_ss_file" in locals_var:
+    if not "ss_file_path" in locals_var:
         message = "No previous 2D structures file located in the pdb folder.\nYou can't execute this step before execute step 0."
-        path_ss_file = resources.get_pdbOut_names(pdb_files, '_pdb_ss_final.txt', message)
+        ss_file_path = resources.get_pdbOut_names(pdb_files, '_pdb_ss_final.txt', message)
         
     if not "dssp_path" in locals_var:
         message = "No previous 2D pickle file located in the pdb folder.\nYou can't execute this step before execute step 0."
-        dssp_path = resources.get_pdbOut_names(pdb_files, '_pdb_ss.pickle', message)
+        dssp_path = resources.get_pdbOut_names(pdb_files, '_ss_masked.pickle', message)
+        
+    if not "pdb_det_path" in locals_var:
+        message = "No PDB details file located in the pdb folder.\nYou can't execute this step before execute step 0."
+        pdb_det_path = resources.get_pdbOut_names(pdb_files, '_pdb_details.csv', message)
+        
+    if not "idr_fasta_path" in locals_var:
+        idr_fasta_path = os.path.join(comp_path_un, un_prot+"_mobidb_idr.fasta")
+        
+    idrs_path = idrPdb.merge_idr_pdb(idr_details, blast_path, file_names, pdb_det_path, (cutoff_idr, min_size_idr))
     
-    idrPdb.run_ss_annotation(idrs_path, path_masked, path_ss_file, dssp_path, save_dup=True)
+    idrPdb.run_ss_annotation(idrs_path, path_masked, path_ss_file, dssp_path, pdb_det_path, idr_fasta_path, save_dup=True)

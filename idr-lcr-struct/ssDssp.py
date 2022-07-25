@@ -295,56 +295,13 @@ def annotate_missing(path_selected, seqres_data, un_pdb_ids, un_pdb_names=[]):
         print("Error: %s : %s" % (temp_path, e.strerror))
     print("{0} seconds".format(time.time() - start_time))
     return ss_lst, error_lst
-
-
-def read_fasta_ss(path_ss):
-    temp = []
-    with open (path_ss, "r") as file_handler:
-        for line in file_handler:
-            if line[:1] == ">":
-                if temp:
-                    comp_seq = re.sub('\\n', '', ''.join(temp))
-                    temp = []
-                    yield comp_seq, header
-                header = line[1:]
-            elif line[:1] != "\n":
-                temp.append(line)
-        if temp:
-            comp_seq = re.sub('\\n', '', ''.join(temp))
-            temp = []
-            yield comp_seq, header
-
-
-def extract_ss(path_ss, sep="_", s_type="pdb"):
-    """Read the fasta file with the two dinstinct types of data (seq and SS)
-       **PS: Decided not to use the SeqIO function because it deletes the
-       white spaces from the dssp structures."""
-    ss_data = dict()
-    ss_seq = dict()
-    ss_keys = list()
-    ss_coords = dict()
-    for v, k in read_fasta_ss(path_ss):
-        ss_comp = k.split(':')
-        ss_type = ss_comp[2]
-        ss_name = ss_comp[0]
-        if (s_type=="pdb"):
-            ss_name+=sep+ss_comp[1]
-        if (ss_type == 'secstr\n') or (ss_type == 'secstr'):
-            ss_data[ss_name] = v
-            ss_keys.append(ss_name)
-            if len(ss_comp)>3:
-                ss_coords[ss_name] = re.sub("coords=", "", ss_comp[3]).rstrip()
-        else:
-            ss_seq[ss_name] = v
-    ss_keys = np.array(ss_keys)
-    return ss_data, ss_keys, ss_seq, ss_coords
-    
+  
     
 def remove_obsoletes(ss_obsolete, missing_ids, path_ss_file, path_new_ss, path_pdb_files):
     ''' Create a new multifasta with seqs and ss that should be kept,
     dealing with the obsolete entries from PDB. '''
     # Get data from old file to append to a new one
-    ss_data, ss_keys, ss_seq, _ = extract_ss(path_ss_file)
+    ss_data, ss_keys, ss_seq, _ = resources.extract_ss(path_ss_file)
 
     # select the ones to keep
     ss_keep = np.setdiff1d(ss_keys, ss_obsolete)
@@ -392,17 +349,17 @@ def generate_masked_fasta(path_ss_final, path_masked, seqres_desc):
     ''' Extract the original PDB sequence with complete description to use as
     source of the blast database. '''
     struct2D = dict() 
-    _, _, ss_seq, ss_coords = extract_ss(path_ss_final)
+    ss_data, _, ss_seq, ss_coords = resources.extract_ss(path_ss_final)
     with open(path_masked, 'w') as newfile:
         for k, seq in ss_seq.items():
             seq_name = re.sub('_', '|', k)
             newfile.write('>pdb|'+seq_name+' '+seqres_desc[k]+'\n')
             newfile.write(wrap_line(seq, 75))
-            #coords=""
-            #if k in ss_coords:
-            #    coords=ss_coords[k]
-            #struct2D[k] = [new_2Dstr, start_end, coords]
-    #return struct2D
+            coords=""
+            if k in ss_coords:
+                coords=ss_coords[k]
+            struct2D[k] = [ss_data[k], coords]
+    return struct2D
     
 
 
@@ -447,7 +404,7 @@ def get_dbref_synthetic_cif(comppath, base):
     ''' Extracts the information of if the structure is syntetic and its resolution
     from the cif file using the gemni package. '''
     base_synt = ""
-    val = ""
+    val = " "
     val_res = []
     with open(comppath, 'r') as handle:
         content = cif.read_string(handle.read())
@@ -482,10 +439,21 @@ def get_dbref_synthetic_cif(comppath, base):
         category_dict = content[0].get_mmcif_category('_em_3d_reconstruction')
         if (len(category_dict)!=0):
             val = category_dict["resolution"][0]
-    if ((val!="") or (val is not None)):
+    if ((val!=" ") and (val is not None)):
+        #print(base)
         val_res.append([base, float(val)])
     return base_synt, val_res
 
+
+def append_synt_df(df_res, ss_synt):
+    ''' Takes the syntetic IDs and add to the dataframe with the resolution data. '''
+    # This step was required because there are cases of PDB/CIF files without
+    # resolution, so I needed to make sure any synthetic is added independently
+    # of having a resolution or not.
+    df_synt = pd.DataFrame(list(zip(ss_synt,[True]*len(ss_synt))), columns=['pdb_id','synthetic'])
+    df_res = pd.merge(df_res, df_synt, how="outer", on="pdb_id")
+    df_res["synthetic"].fillna(False,inplace=True)
+    return df_res
 
 def extract_from_pdb_file_synt(path_pdb_files, sel_ids, resolution_path):
     ''' Function will extract all data from the PDB file in a first interaction
@@ -507,7 +475,7 @@ def extract_from_pdb_file_synt(path_pdb_files, sel_ids, resolution_path):
     i=1
     for name in sel_files:
         out1, out2 = "", ""
-        lst_jrnl, lst_res = [], []
+        lst_res = []
         basename = os.path.splitext(os.path.basename(name))[0]
         base = os.path.splitext(basename)[0]
         ext = os.path.splitext(basename)[1]
@@ -524,32 +492,34 @@ def extract_from_pdb_file_synt(path_pdb_files, sel_ids, resolution_path):
             ll_res = ll_res + lst_res
         if (i%10**4==0):
             print("{0} of {1} completed for the synthetics search.".format(str(i), str(len(sel_files))))
+        os.remove(comppath)
         i+=1
     print("{0} completed for the synthetics search.".format(str(len(sel_files))))
+    # This 4 PDB sequences have no organism and no indication of being synthetic.
+    # They are old and engeneered. Checked even the .cif file, where they present an "?"
+    ss_synt = ss_synt + ["1MJ0", "1N0Q", "1N0R", "3F0H"]
     # Getting the resolution info
-    df_res = pd.DataFrame(ll_res, columns=["pdb_id", "pdb_resolution", "syntetic"])
+    df_res = pd.DataFrame(ll_res, columns=["pdb_id", "pdb_resolution"])
+    df_res = append_synt_df(df_res, ss_synt)
     tot_in_sec = time.time() - start_time
     print("--- %s seconds ---" % (tot_in_sec))
     try:
         shutil.rmtree(temp_path)
     except OSError as e:
         print("Error: %s : %s" % (temp_path, e.strerror))
-    return ss_synt, df_res
+    return df_res
     
     
-def extract_from_pdb_file(path_pdb_files, path_pdb, date_start):
-    ''' Searches for synthetics and experiment info for PDB IDs aligned to sequences . '''
+def extract_from_pdb_file(path_pdb_files, path_pdb, date_start, det_old_path, sel_ids):
+    ''' Load or annotate synthetics and other experiment info for PDB IDs 
+    aligned to sequences . '''
     resolution_path = os.path.join(path_pdb, date_start+"_pdb_details.csv")
-    if os.path.exists(resolution_path):
-        df_resol = pd.read_csv(resolution_path)
-    else:
-        df_pdb = extract_from_pdb_file_synt(path_pdb_files, sel_ids, resolution_path)
-        # This 4 PDB sequences have no organism and no indication of being synthetic.
-        # They are old and engeneered. Checked even the .cif file, where they present an "?"
-        lst_synt = lst_synt + ["1MJ0", "1N0Q", "1N0R", "3F0H"]
-        save_list(ANALYSIS_PATH+synth_name, lst_synt)
-        df_resol.to_csv(ANALYSIS_PATH+res_name, index=False)
-    return lst_synt, df_resol
+    df_pdb_new = extract_from_pdb_file_synt(path_pdb_files, sel_ids, resolution_path)
+    if os.path.exists(det_old_path):
+        df_pdb = pd.read_csv(det_old_path)
+        df_pdb = pd.concat([df_pdb_new, df_pdb]).sort_values(by=["pdb_id"])
+    df_pdb.to_csv(resolution_path, index=False)
+    return df_pdb
 
 
 def main(path_pdb):
@@ -583,14 +553,14 @@ def main(path_pdb):
         file_error = os.path.join(path_pdb, date_start+"_dssp_error.txt")
         resources.save_sep_llists(errors_dssp, file_error, "\t")
         path_masked_final = os.path.join(path_pdb, date_start+"_pdb_masked.txt")
-        generate_masked_fasta(path_ss_final, path_masked_final, seqres_desc)
-        #path_masked_pkl = os.path.join(path_pdb, date_start+"_pdb_masked.pickle")
-        #resources.save_pickle(struct2D, path_masked_pkl, 'wb')
+        struct2D = generate_masked_fasta(path_ss_final, path_masked_final, seqres_desc)
+        path_masked_pkl = os.path.join(path_pdb, date_start+"_ss_masked.pickle")
+        resources.save_pickle(struct2D, path_masked_pkl, 'wb')
     
-    # Extracting essential info from the PDB files (type, resolution, interactions?)
-    # _, ss_keys, _, _ = extract_ss(path_ss_final)
-    # sel_ids = np.unique([ids.split("_")[0] for ids in ss_keys]).tolist()  # Run this if you want to take all ids from 2D structure file
-    df_pdb_details = extract_from_pdb_file(path_pdb_files, path_pdb, date_start)
+        # Extracting essential info from the PDB files (type, resolution, interactions?)
+        # _, ss_keys, _, _ = resources.extract_ss(path_ss_final)
+        # missing_ids = np.unique([ids.split("_")[0] for ids in ss_keys]).tolist()  # Run this if you want to take all ids from 2D structure file
+        df_pdb_details = extract_from_pdb_file(path_pdb_files, path_pdb, date_start, det_old_path, missing_ids)
    
     
     

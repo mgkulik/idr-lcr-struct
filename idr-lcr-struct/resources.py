@@ -13,6 +13,7 @@ import csv
 from Bio import SeqIO
 import numpy as np
 import pandas as pd
+import re
 
 AA_CODE_LIST = ['?','A','R','N','D','C','Q','E','G','H','I','L','K','M','F','P','S','T','W','Y','V','U','O','B','Z','X']
 AA_CODE_DICT = {'A':1,'C':2,'D':3,'E':4,'F':5,'G':6,'H':7,'I':8,'K':9,'L':10,'M':11,'N':12,'P':13,'Q':14,'R':15,'S':16,'T':17,'V':18,'W':19,'Y': 20,'U':21,'O':22,'B':23,'Z':24,'X':25}
@@ -227,6 +228,25 @@ def get_pairs(col1, col2):
     return val
 
 
+def read_fasta_ss(path_ss):
+    ''' Read SS fasta file '''
+    temp = []
+    with open (path_ss, "r") as file_handler:
+        for line in file_handler:
+            if line[:1] == ">":
+                if temp:
+                    comp_seq = re.sub('\\n', '', ''.join(temp))
+                    temp = []
+                    yield comp_seq, header
+                header = line[1:]
+            elif line[:1] != "\n":
+                temp.append(line)
+        if temp:
+            comp_seq = re.sub('\\n', '', ''.join(temp))
+            temp = []
+            yield comp_seq, header
+
+
 def extract_ss(path_ss, sep="_", s_type="pdb"):
     """Read the fasta file special for the secondary structure cases.
     Here we have 1 entry with the sequence (sequence) and 1 with the secondary
@@ -237,7 +257,7 @@ def extract_ss(path_ss, sep="_", s_type="pdb"):
     ss_seq = dict()
     ss_keys = list()
     ss_coords = dict()
-    for v, k in read_fasta(path_ss):
+    for v, k in read_fasta_ss(path_ss):
         ss_comp = k.split(':')
         ss_type = ss_comp[2]
         ss_name = ss_comp[0]
