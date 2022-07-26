@@ -15,6 +15,7 @@ import idr
 import os
 import poly
 import idrPdb
+import pdbDssp
 import resources
 
 seq = [0,6]
@@ -71,11 +72,11 @@ if int(num_sel)==0:
     
     if not "path_masked" in locals_var:
         message = "No previous masked file located in the pdb folder.\nPlease confirm it, otherwise all PDB files will be downloaded.\\(your process will run for several days)."
-        path_masked = resources.get_pdbOut_names(files, '_pdb_masked.txt', message)
+        path_masked = resources.get_pdbOut_names(pdb_files, '_pdb_masked.txt', message)
        
     if not "path_ss_file" in locals_var:
         message = "No previous 2D structures file located in the pdb folder.\nPlease confirm it, otherwise all PDB files will be downloaded.\\(your process will run for several days)."
-        path_ss_file = resources.get_pdbOut_names(files, '_pdb_ss_final.txt', message)
+        path_ss_file = resources.get_pdbOut_names(pdb_files, '_pdb_ss_final.txt', message)
         
     if not "pdb_det_path" in locals_var:
         message = "No PDB details file located in the pdb folder.\nPlease confirm it, otherwise the step to extract extra information from PDB files can take up to an hour."
@@ -148,7 +149,7 @@ if (int(num_sel)==1 or int(num_sel)==4):
 if (int(num_sel)==1 or int(num_sel)==5):
     """ Several outputs that save the crossing data do disc to save memory (using pickle files) .
     
-    Main output will be a big csv file with all the cases where and IDR
+    Main output will a csv file with all IDRs, with or without overlaps with PDB
     in our set overlapped with a PDB sequence in a significant way. All IDRs not
     overlapped with PDB are also kept for future analysis.
     IMPORTANT: This file may have multiple entries for each IDR. """
@@ -156,24 +157,7 @@ if (int(num_sel)==1 or int(num_sel)==5):
     cutoff_idr=.5
     min_size_idr=10
     
-    if not "idr_details" in locals_var:
-        idr_details = os.path.join(comp_path_un, un_prot+"_mobidb_idr_details.csv")
-     
-    if not "blast_path" in locals_var:
-        blast_path = input("Provide the path for the blast XML file. \nIt must be available in the directory provided before and start with the Uniprot proteome ID: ")   
-        blast_path = resources.valid_file(blast_path, comp_path_un)
-    
-    change_cut = input("The cut off values for IDRs overlapping PDB sequences are: 0.50 or 10 residues.\nDo you want to change it (0:No, 1:Yes)? ")
-    assert(change_cut.isnumeric()), "Value must be 0 or 1!"
-    assert(int(change_cut)==0 or int(change_cut)==1), "Value must be 0 or 1!"
-    
-    if (int(change_cut)==1):
-        cutoff_idr = input("Define new accepted fraction (e.g. 0.50): ")
-        assert(float(cutoff_idr)>=0.5 and float(cutoff_idr)<=1.0), "Value must be between 0 and 1!"
-        min_size_idr = input("Define new accepted minimum of residues (e.g. 10): ")
-        assert(min_size_idr.isnumeric()), "Value must be higher than 10!"
-        assert(int(min_size_idr)>10), "Value must be higher than 10!"
-        
+    # Load all the PDB paths required for the last step of the process
     pdb_files = resources.get_pdb_directory(comp_path)
     
     if not "pdb_mask_path" in locals_var:
@@ -194,7 +178,39 @@ if (int(num_sel)==1 or int(num_sel)==5):
         
     if not "idr_fasta_path" in locals_var:
         idr_fasta_path = os.path.join(comp_path_un, un_prot+"_mobidb_idr.fasta")
-        
-    idrs_path = idrPdb.merge_idr_pdb(idr_details, blast_path, file_names, pdb_det_path, (cutoff_idr, min_size_idr))
     
-    idrPdb.run_ss_annotation(idrs_path, path_masked, path_ss_file, dssp_path, pdb_det_path, idr_fasta_path, save_dup=True)
+    # Now check what was already done (intermediary files)
+    out_files = sorted([f.path for f in os.scandir(comp_path_un) if os.path.isfile(f)])
+    idrs_path = resources.get_pdbOut_names(out_files, '_EVAL_data_noSeqs_idr.csv', "")
+    
+    if idrs_path=="":
+        
+        if not "idr_details" in locals_var:
+            idr_details = os.path.join(comp_path_un, un_prot+"_mobidb_idr_details.csv")
+        
+        if not "blast_path" in locals_var:
+            blast_path = input("Provide the path for the blast XML file. \nIt must be available in the directory provided before and start with the Uniprot proteome ID: ")   
+            blast_path = resources.valid_file(blast_path, comp_path_un)
+        
+        change_cut = input("The cut off values for IDRs overlapping PDB sequences are: 0.50 or 10 residues.\nDo you want to change it (0:No, 1:Yes)? ")
+        assert(change_cut.isnumeric()), "Value must be 0 or 1!"
+        assert(int(change_cut)==0 or int(change_cut)==1), "Value must be 0 or 1!"
+        
+        if (int(change_cut)==1):
+            cutoff_idr = input("Define new accepted fraction (e.g. 0.50): ")
+            assert(float(cutoff_idr)>=0.5 and float(cutoff_idr)<=1.0), "Value must be between 0 and 1!"
+            min_size_idr = input("Define new accepted minimum of residues (e.g. 10): ")
+            assert(min_size_idr.isnumeric()), "Value must be higher than 10!"
+            assert(int(min_size_idr)>10), "Value must be higher than 10!"
+            
+        idrs_path = idrPdb.merge_idr_pdb(idr_details, blast_path, file_names, pdb_det_path, (cutoff_idr, min_size_idr))
+    
+    # Extract the information about PDBs over IDRs and select the best candidates based on the filtering criteria.
+    idr_all_path = resources.get_pdbOut_names(out_files, 'data_all_idr.csv', "")
+    if idr_all_path="":
+        idr_all_path = idrPdb.run_ss_annotation(idrs_path, pdb_mask_path, ss_file_path, dssp_path, idr_fasta_path, file_names, (cutoff_idr, min_size_idr), save_dup=True)
+    
+    # Now get all the CIF files that are missing and extract the auth to calculate the real coordinates of the
+    
+if (int(num_sel)==1 or int(num_sel)==6):
+    pass

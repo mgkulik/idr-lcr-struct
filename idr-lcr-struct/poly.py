@@ -157,7 +157,9 @@ def generate_poly_groups(df_poly_details):
     df_poly_details['poly_mask'] = df_poly_details.apply(lambda x: get_poly_mask(x.poly_pairs1, x.poly_pairs2, x.poly_aa), axis=1)
     df_poly_details['poly_patt'] = df_poly_details.apply(lambda x: get_poly_patt(x.poly_mask), axis=1)
     df_poly_details['poly_cat'] = df_poly_details.apply(lambda x: get_poly_cat(x.poly_patt), axis=1)
+    df_poly_details[['cnt_pair1','cnt_pair2']] = df_poly_details.apply(lambda x: get_align_aa_counts(x['poly_aa'], x['poly_pairs1'], x['poly_pairs2']), axis=1)
     return df_poly_details
+
 
 ### IDR COVERAGE by POLY ###
 def extract_poly_idr(idrcsv_path, df_poly, cutoff=.6, min_size=6):
@@ -310,125 +312,6 @@ def extract_poly_idr_pdb(df_idr_details, df_poly, cutoff=.6, min_size=4):
     return df_poly_new
 
 
-def merge_all_coverages(sel_ids, sz_over):
-    _, un_idx, rep_idx = np.unique(sel_ids, return_index=True, return_inverse=True)
-    new_sz_over = np.bincount(un_idx[rep_idx], weights=sz_over)
-    new_sz_over = new_sz_over[un_idx]
-    return new_sz_over, un_idx, rep_idx
-
-
-def merge_poly_coverage(df_poly_details, cols, df_idr_details, comp="idr", par="idr_name"):
-    all_cols = ['poly_name', 'poly_pairs', 'poly_pair_tp', par]+cols
-    df_poly_sel = (df_poly_details.loc[~df_poly_details[par].isna(), all_cols].
-                   sort_values(by=['idr_name', cols[-2], cols[-1]]))
-    idr_ids = df_poly_sel.loc[:,'idr_name'].values
-    un_idrs, un_ids_idrs, inv_ids, counts_poly = np.unique(idr_ids, return_counts=True, 
-                                                           return_index=True, 
-                                                           return_inverse=True)
-    poly_ids = df_poly_sel.loc[:,'poly_name'].values
-    poly_pairs = df_poly_sel.loc[:,'poly_pairs'].values
-    poly_polar_cat = df_poly_sel.loc[:,'poly_pair_tp'].values
-    poly_polar = df_poly_sel.loc[:,cols[-4]].values
-    poly_non_polar = df_poly_sel.loc[:,cols[-3]].values
-    poly_coords = ["|".join(i) for i in df_poly_sel.loc[:,cols[-2:]].values.astype(str)]
-    if (comp=="pdb"):
-      poly_coords_ss = ["|".join(i) for i in df_poly_sel.loc[:,cols[-6:-4]].values.astype(str)]
-      poly_coords_ss_d = dict()
-    un_ids_pairs = np.append(un_ids_idrs[1:], len(poly_ids))
-    polyID_d, poly_pairs_d, poly_polar_cat_d, poly_coords_d = dict(), dict(), dict(), dict()
-    poly_polar_d, poly_non_polar_d = dict(), dict()
-    for i,j,k in zip(un_idrs, un_ids_idrs, un_ids_pairs):
-        polyID_d[i] = list(poly_ids[j:k])
-        poly_pairs_d[i] = list(poly_pairs[j:k])
-        poly_polar_cat_d[i] = list(poly_polar_cat[j:k])
-        poly_coords_d[i] = list(poly_coords[j:k])
-        poly_polar_d[i] = sum(poly_polar[j:k])
-        poly_non_polar_d[i] = sum(poly_non_polar[j:k])
-        if (comp=="pdb"):
-            poly_coords_ss_d[i] = list(poly_coords_ss[j:k])
-        
-    sz_over, un_idx, rep_idx = merge_all_coverages(idr_ids, df_poly_sel[cols[0]].values)
-    idr_sizes = df_poly_sel.loc[:,cols[1]].values
-    idr_sizes = idr_sizes[un_idx]
-    over_idr = cross.get_overlap_size(sz_over, idr_sizes)
-    
-    df_over_idr = pd.DataFrame(np.hstack((un_idrs[:, None], over_idr[:, None],
-                                          sz_over[:, None], counts_poly[:, None])), 
-                               columns=["idr_name", "poly_over_"+comp, "poly_sum_sz_"+comp, "poly_cnt_"+comp])
-    df_over_idr["poly_over_"+comp] = df_over_idr["poly_over_"+comp].astype(float)
-    #df_over_idr["poly_sum_sz_"+comp] = df_over_idr["poly_sum_sz_"+comp].astype(int)
-    df_over_idr["polyXYs_"+comp] = df_over_idr["idr_name"].apply(lambda x: ", ".join(polyID_d[x]))
-    df_over_idr["poly_pairs_"+comp] = df_over_idr["idr_name"].apply(lambda x: ", ".join(poly_pairs_d[x]))
-    df_over_idr["poly_polarity_"+comp] = df_over_idr["idr_name"].apply(lambda x: ", ".join(poly_polar_cat_d[x]))
-    df_over_idr["poly_tot_polar_"+comp] = df_over_idr["idr_name"].apply(lambda x: poly_polar_d[x])
-    df_over_idr["poly_tot_non_polar_"+comp] = df_over_idr["idr_name"].apply(lambda x: poly_non_polar_d[x])
-    df_over_idr["poly_coords_"+comp] = df_over_idr["idr_name"].apply(lambda x: ", ".join(poly_coords_d[x]))
-    if (comp=="pdb"):
-        df_over_idr["poly_coords_ss"] = df_over_idr["idr_name"].apply(lambda x: ", ".join(poly_coords_ss_d[x]))
-    df_idr_details = pd.merge(df_idr_details, df_over_idr, how="left", on="idr_name")
-    return df_idr_details
-
-
-def merge_poly_ss_coverage(df_2D_details, df_poly_details, df_idr_details):
-    df_ss_sel = df_2D_details.loc[:, ['poly_name', 'poly_ss']]
-    df_poly_sel = df_poly_details.loc[:, ['poly_name', 'idr_name', 'poly_start']]
-    df_ss_sel = df_ss_sel.merge(df_poly_sel, how='left', on='poly_name')
-    df_ss_sel = df_ss_sel.sort_values(by=['idr_name', 'poly_start'])
-    
-    poly_regions = df_ss_sel.loc[:,'poly_ss'].values
-    poly_regions_d = dict()
-    un_idrs, un_ids_idrs, inv_ids, counts_poly = np.unique(df_ss_sel.idr_name.values, return_counts=True, 
-                                                           return_index=True, return_inverse=True)
-    un_ids_pairs = np.append(un_ids_idrs[1:], len(poly_regions))
-    for i,j,k in zip(un_idrs, un_ids_idrs, un_ids_pairs):
-        poly_regions_d[i] = list(poly_regions[j:k])
-    
-    df_ss = pd.DataFrame(df_ss_sel.loc[df_ss_sel['idr_name'].isin(un_idrs), 'idr_name'].drop_duplicates())
-    df_ss["poly_ss_region_un"] = df_ss['idr_name'].apply(lambda x: "".join(poly_regions_d[x]))
-    df_2D = cross.prepare_ss_counts(df_ss, "", "pdb")
-    df_idr_details = df_idr_details.merge(df_2D, how="left", on="idr_name")
-    
-    return df_idr_details
-
-
-def generate_poly_mask(idr_name, seq_aa, poly_coords_idr, idr_start, idr_end, side):
-    #print(idr_name)
-    sub=0
-    if (side!="_ss"):
-        sub=1
-    poly_coords = poly_coords_idr.split(', ')
-    for i in range(len(poly_coords)):
-        pair = poly_coords[i].split('|')
-        start = int(float(pair[0]))
-        end = int(float(pair[1]))
-        seq_aa = seq_aa[:start-sub]+'|'*(end-start+sub)+seq_aa[end:]
-    seq_aa = '|'*(int(idr_start)-sub)+seq_aa[int(idr_start)-sub:int(idr_end)]+'|'*(len(seq_aa)-int(idr_end))
-    return seq_aa
-
-
-def extract_region_noPoly(df_idr_details, cols, side=""):
-    #cols = ['seq_aa', 'poly_coords_idr', 'idr_start', 'idr_end']
-    if (side!=""):
-        side = "_"+side
-    df_sel = df_idr_details.loc[~df_idr_details[cols[1]].isna(), ['idr_name']+cols]
-    df_sel['idr_poly_mask'+side] = (df_sel.apply(lambda x: 
-                                            generate_poly_mask(x['idr_name'],
-                                                               x[cols[0]],
-                                                               x[cols[1]],
-                                                               x[cols[2]],
-                                                               x[cols[3]], side), axis=1))
-    df_sel['idr_noPoly'+side] = df_sel['idr_poly_mask'+side].str.replace('|', '')
-    if (side=="_ss"):
-        df_ss = df_sel.loc[:, ['idr_name', 'idr_noPoly'+side]]
-        df_2D = cross.prepare_ss_counts(df_ss, "", "noPDB")
-        df_idr_details = df_idr_details.merge(df_2D, how="left", on="idr_name")
-    else:
-        df_sel[['tot_polar_noPoly'+side,'tot_non_polar_noPoly'+side]] = df_sel.apply(lambda x: resources.get_AAcomposition(x['idr_noPoly'+side]), axis=1)
-    df_sel = df_sel.drop(cols, axis=1)
-    df_idr_details = pd.merge(df_idr_details, df_sel, how="left", on="idr_name")
-    return df_idr_details
-
-
 def get_align_aa_counts(align_reg, pair1, pair2):
     ''' Counts how many occurrences of each AA appear after the alignment with PDB.'''
     c = collections.Counter(align_reg)
@@ -467,12 +350,8 @@ def run_poly(seqs_path, polyXY_path, idrcsv_path, n_aa, cutoff, min_size):
 
 
 ### MAIN IDR POLY SESSION
-def run_idr_poly(df_idr_details, df_poly, polyXYfas_path, pdb_mask_path, dssp_path, blast_over_path, path_sel_coords, ssSeq_path, polyidr_path, polyss_path):
-    #df_idr_details = pd.read_csv(idrcsv_path)
-    # Poly over IDR regardless of PDB structure
-    
-    df_poly_details[['cnt_pair1','cnt_pair2']] = df_poly_details.apply(lambda x: get_align_aa_counts(x['poly_aa'], x['poly_pairs1'], x['poly_pairs2']), axis=1)
-        
+def run_idr_poly_pdb(df_idr_details, df_poly_details, pdb_mask_path, dssp_path, file_names, path_sel_coords, ssSeq_path, polyidr_path, polyss_path):
+
     # Getting IDR side of the overlaps (list of PolyXYs and coverage with PDB)
     df_poly_details = extract_poly_idr_pdb(df_idr_details, df_poly_details)
         

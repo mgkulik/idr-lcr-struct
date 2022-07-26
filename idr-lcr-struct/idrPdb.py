@@ -1329,11 +1329,11 @@ def get_dssp_idr(dssp_path, blast_over_path, df_idr_details, prefix="idr", delim
 
     # Counting the 2D structures in the IDR region
     df_ss = pdb_data.loc[:, [linker_id, 'ss_region_noSeq_gaps', 'final_region_pdb', 'final_region_seq']]
-    df_idr_2D, _ = prepare_ss_counts(df_ss, linker_id, "", "", prefix)
+    df_2D_idr, _ = prepare_ss_counts(df_ss, linker_id, "", "", prefix)
     
     # Adding the midline to the ss file (not cutted, complete midlines)
     pdb_data_sel = pdb_data.loc[:, [linker_id, "midline", "midline_msk"]]
-    df_idr_2D = pd.merge(df_idr_2D, pdb_data_sel, how='left', on=linker_id)
+    df_2D_idr = pd.merge(df_2D_idr, pdb_data_sel, how='left', on=linker_id)
     
     # Counting the 2D structures to the left of the IDR region
     cols=["ss_surr_left", "pdb_surr_left", "seq_surr_left"]
@@ -1341,7 +1341,7 @@ def get_dssp_idr(dssp_path, blast_over_path, df_idr_details, prefix="idr", delim
         cols=["ss_idr_left", "pdb_idr_left", "seq_idr_left"]
     df_ss = pdb_data.loc[:, [linker_id]+cols]
     df_left_2D, _ = prepare_ss_counts(df_ss, linker_id, "left", "idr", prefix)
-    df_idr_2D = pd.merge(df_idr_2D, df_left_2D, how='left', on=linker_id)
+    df_2D_idr = pd.merge(df_2D_idr, df_left_2D, how='left', on=linker_id)
     
     # Counting the 2D structures to the right of the IDR region
     cols=["ss_surr_right", "pdb_surr_right", "seq_surr_right"]
@@ -1349,28 +1349,28 @@ def get_dssp_idr(dssp_path, blast_over_path, df_idr_details, prefix="idr", delim
         cols=["ss_idr_right", "pdb_idr_right", "seq_idr_right"]
     df_ss = pdb_data.loc[:, [linker_id]+cols]
     df_right_2D, _ = prepare_ss_counts(df_ss, linker_id, "right", "idr", prefix)
-    df_idr_2D = pd.merge(df_idr_2D, df_right_2D, how='left', on=linker_id)
+    df_2D_idr = pd.merge(df_2D_idr, df_right_2D, how='left', on=linker_id)
     
     if (prefix!="idr"):
         # Counting the 2D structures to the left of the IDR region
         df_ss = pdb_data.loc[:, [linker_id, 'ss_surr_idr_left', 'pdb_surr_idr_left', 'seq_surr_idr_left']]
         df_left_2D, _ = prepare_ss_counts(df_ss, linker_id, "left", "surr", prefix)
-        df_idr_2D = pd.merge(df_idr_2D, df_left_2D, how='left', on=linker_id)
+        df_2D_idr = pd.merge(df_2D_idr, df_left_2D, how='left', on=linker_id)
         
         # Counting the 2D structures to the right of the IDR region
         df_ss = pdb_data.loc[:, [linker_id, 'ss_surr_idr_right', 'pdb_surr_idr_right', 'seq_surr_idr_right']]
         df_right_2D, _ = prepare_ss_counts(df_ss, linker_id, "right", "surr", prefix)
-        df_idr_2D = pd.merge(df_idr_2D, df_right_2D, how='left', on=linker_id)
+        df_2D_idr = pd.merge(df_2D_idr, df_right_2D, how='left', on=linker_id)
         
         # Counting the 2D structures for the delimited region
         if (delim!=0):
             df_ss = pdb_data.loc[:, [linker_id, 'ss_delim_left', 'pdb_delim_left', 'seq_delim_left']]
             df_left_2D, ss_map_left = prepare_ss_counts(df_ss, linker_id, "left", "delim", prefix)
-            df_idr_2D = pd.merge(df_idr_2D, df_left_2D, how='left', on=linker_id)
+            df_2D_idr = pd.merge(df_2D_idr, df_left_2D, how='left', on=linker_id)
             
             df_ss = pdb_data.loc[:, [linker_id, 'ss_delim_right', 'pdb_delim_right', 'seq_delim_right']]
             df_right_2D, ss_map_right = prepare_ss_counts(df_ss, linker_id, "right", "delim", prefix)
-            df_idr_2D = pd.merge(df_idr_2D, df_right_2D, how='left', on=linker_id)
+            df_2D_idr = pd.merge(df_2D_idr, df_right_2D, how='left', on=linker_id)
             
             map_50aa = np.hstack([ss_map_left, ss_map_right])
             map_50aa = map_50aa[pdb_data_ids, :]
@@ -1400,113 +1400,77 @@ def get_dssp_idr(dssp_path, blast_over_path, df_idr_details, prefix="idr", delim
     df_idr_details = pd.merge(df_idr_details, pdb_coords, how='left', on=['internal_id', prefix+'_name'])
     
     # Adding real percentage over structure considering the structure counts
-    df_idr_2D["over_ss_real_sz"] = (df_idr_2D['cnt_helix']+df_idr_2D['cnt_sheet']+
-                                    df_idr_2D['cnt_coil']+ df_idr_2D['cnt_unfolded'])
-    df_idr_2D["over_ss_real_perc"] = df_idr_2D["over_ss_real_sz"]/df_idr_2D[prefix+"_seq"].str.len()
+    df_2D_idr["over_ss_real_sz"] = (df_2D_idr['cnt_helix']+df_2D_idr['cnt_sheet']+
+                                    df_2D_idr['cnt_coil']+ df_2D_idr['cnt_unfolded'])
+    df_2D_idr["over_ss_real_perc"] = df_2D_idr["over_ss_real_sz"]/df_2D_idr[prefix+"_seq"].str.len()
     
-    df_real_ss = df_idr_2D.loc[:, [linker_id, "over_ss_real_sz", "over_ss_real_perc"]]
+    df_real_ss = df_2D_idr.loc[:, [linker_id, "over_ss_real_sz", "over_ss_real_perc"]]
     df_idr_details = pd.merge(df_idr_details, df_real_ss, how='left', on=linker_id)
-    df_idr_2D.drop(['over_ss_real_sz', 'over_ss_real_perc'], inplace=True, axis=1)
+    df_2D_idr.drop(['over_ss_real_sz', 'over_ss_real_perc'], inplace=True, axis=1)
     
     print("All SS transformations done. Final time: {0} seconds".format((time.time() - start_time)/60))
     
-    return df_idr_details, df_idr_2D, pdb_data
+    return df_idr_details, df_2D_idr, pdb_data
+
+def remove_no_ss(df_2D_idr, cutoff):
+    ''' Filter the regions composed by unmodeled residues according to the cutoff
+    criteria. '''
+    df_2D_idr_v2 = df_2D_idr.copy()
+    df_2D_idr_v2['unmodeled'] = df_2D_idr_v2.idr_ss.str.len()-df_2D_idr_v2['cnt_unmodeled']
+    df_2D_idr_v2['frac_unmodeled'] = df_2D_idr_v2['unmodeled']/df_2D_idr_v2.idr_ss.str.len()
+    df_2D_idr_v2['keep1'] = (df_2D_idr_v2['unmodeled']>=cutoff[1])
+    df_2D_idr_v2['keep2'] = (df_2D_idr_v2['frac_unmodeled']>=cutoff[0])
+    df_2D_idr_v2['keep'] = df_2D_idr_v2['keep1']|df_2D_idr_v2['keep2']
+    lst_ids = df_2D_idr_v2.loc[~df_2D_idr_v2['keep'], 'internal_id'].tolist()
+    return lst_ids, df_2D_idr_v2
 
 
-def remove_unmodeled_synthetic(df_idr_details, df_idr_2D, pdb_data, lst_synt, df_resol, cutoff=(.5,10)):
-    ''' Remove all the cases completely composed by missing 
-    regions and gaps. Filter out sy'''
-    # Removing alignments covered by unmodeled residues and gaps
+def final_filtering(df_idr_details, df_2D_idr, pdb_data, basis_path, prefix, cutoff=(.5,10)):
+    ''' Remove all the cases composed by missing regions according to the 
+    established cutoff criteria to then filter the best candidate based on the 
+    selected ordering criteria. '''
+
+    print("\nStarting the final filtering of best candidates...")
+    
     df_idr_details_v2 = df_idr_details.copy()
-    if (DEBUG_MODE):
-        ids1 = df_idr_details_v2.loc[~df_idr_details_v2["pdb_name"].isna(), "idr_name"]
-        print("Before filtering unmodeled by the strucuture:")
-        print('Rows PDB: {0} - Unique {1} IDRs'.format(len(ids1), len(np.unique(ids1))))
+    ids1 = df_idr_details_v2.loc[~df_idr_details_v2["pdb_name"].isna(), "idr_name"]
+    print("\nBefore filtering unmodeled by the strucuture:")
+    print('Rows PDB: {0} - Unique {1} IDRs'.format(len(ids1), len(np.unique(ids1))))
     
-    
-    # Adding the resolutions to the main file
-    df_idr_details_v2 = pd.merge(df_idr_details_v2, df_resol, how='left', on='pdb_id')
-    lst_ids, df_idr_2D_v2 = remove_no_ss(df_idr_2D, cutoff)
-    # float_cols = ["pdb_evalue", "over_perc", "over_sz", "bitscore", 
-    #             "internal_id2", "seq_start", "seq_end", "seq_align_start", 
-    #             "seq_align_end", "pdb_start", "pdb_end", "hit_id", "hsp_id", 
-    #             "pdb_all_size", "pdb_size", "over_perc_seq", "over_perc_pdb", 
-    #             "over_dir", "idr_pdb_rel_start", "idr_pdb_rel_end", 
-    #             "idr_seq_rel_start", "idr_seq_rel_end", "idr_seq_align_start", 
-    #             "idr_seq_align_end", "idr_final_seq_align_start", 
-    #             "idr_final_seq_align_end", "idr_pdb_gaps", "idr_region_seq_gaps", 
-    #             "over_ss_real_sz", "over_ss_real_perc"]
-    # df_idr_details_v2.loc[df_idr_details_v2['internal_id'].isin(lst_ids), float_cols] = np.nan
-    # obj_cols = ["pdb_name", "internal_id", "removed_on_s", "removed_on", 
-    #             "kept_on", "pdb_id", "pdb_desc", "pdb_aa", "ss_seq", 
-    #             "final_align_ss"]
-    # df_idr_details_v2.loc[df_idr_details_v2['internal_id'].isin(lst_ids), obj_cols] = ""
+    # Removing alignments covered by unmodeled residues and gaps
+    lst_ids, df_2D_idr_v2 = remove_no_ss(df_2D_idr, cutoff)
     df_idr_details_v2.loc[df_idr_details_v2['internal_id'].isin(lst_ids), "pdb_name":"ss_seq"] = np.nan
     df_idr_details_v2.loc[df_idr_details_v2['internal_id'].isin(lst_ids), "ss_final_over_sz":] = np.nan
-    if (DEBUG_MODE):
-        # Diff 17,357 cases - 1,087 IDRs removed
-        ids1 = df_idr_details_v2.loc[~df_idr_details_v2["pdb_name"].isna(), "idr_name"]
-        print("After filtering unmodeled by the strucuture:")
-        print('Rows PDB: {0} - Unique {1} IDRs'.format(len(ids1), len(np.unique(ids1))))
+   
+    ids1 = df_idr_details_v2.loc[~df_idr_details_v2["pdb_name"].isna(), "idr_name"]
+    print("\nAfter filtering unmodeled by the strucuture:")
+    print('Rows PDB: {0} - Unique {1} IDRs'.format(len(ids1), len(np.unique(ids1))))
     
-    if (DEBUG_MODE):
-        cols = list(df_idr_details_v2.columns)
-        intermediary = df_idr_details_v2.loc[:, cols]
-        intermediary.to_csv(ANALYSIS_PATH+'data_int_all_'+prefix+'.csv', index=False)
-    
-    # Removing Synthetic structures
-    df_ids = df_idr_details_v2.loc[~df_idr_details_v2.pdb_name.isna(), ["internal_id", "pdb_id"]]
-    df_idr_2D_v2 = pd.merge(df_idr_2D_v2, df_ids, how='left', on='internal_id')
-    df_idr_2D_v2["is_synth"] = 0
-    df_idr_2D_v2.loc[df_idr_2D_v2['pdb_id'].isin(lst_synt), "is_synth"] = 1
-    if (DEBUG_MODE):
-        df_idr_2D_v2.to_csv(ANALYSIS_PATH+'data_int_ss_'+prefix+'.csv', index=False)
-    #df_idr_details_v2.loc[df_idr_details_v2['pdb_id'].isin(lst_synt), float_cols] = np.nan
-    #df_idr_details_v2.loc[df_idr_details_v2['pdb_id'].isin(lst_synt), obj_cols] = ""
-    df_idr_details_v2.loc[df_idr_details_v2['pdb_id'].isin(lst_synt), "pdb_name":"ss_seq"] = np.nan
-    df_idr_details_v2.loc[df_idr_details_v2['pdb_id'].isin(lst_synt), "ss_final_over_sz":] = np.nan
-    
-    if (DEBUG_MODE):
-        ids1 = df_idr_details_v2.loc[~df_idr_details_v2["pdb_name"].isna(), "idr_name"]
-        print("After filtering Synthetic PDB Structures:")
-        print('Rows PDB: {0} - Unique {1} IDRs'.format(len(ids1), len(np.unique(ids1))))
-    
+    df_idr_details_v2.to_csv(basis_path+'EVAL_data_int_all.csv', index=False)
+
     # Keeping just the highest e-value now that we removed the unmodeled
     df_idr_details_v2 = df_idr_details_v2.sort_values(by=[prefix+'_name', 'over_perc', 'pdb_evalue', 'pdb_resolution', 'bitscore'], ascending=[True, False, True, True, False]).drop_duplicates(subset=[prefix+'_name'])
     #df_idr_details_v2 = df_idr_details_v2.sort_values(by=[prefix+'_name', 'over_perc', 'pdb_evalue', 'bitscore'], ascending=[True, False, True, False]).drop_duplicates(subset=[prefix+'_name'])
-    if (DEBUG_MODE):
-        ids1 = df_idr_details_v2.loc[~df_idr_details_v2["pdb_name"].isna(), "idr_name"]
-        print("Keeping just the top alignment e-value:")
-        print('Rows PDB: {0} - Unique {1} IDRs'.format(len(ids1), len(np.unique(ids1))))
-    
+    ids1 = df_idr_details_v2.loc[~df_idr_details_v2["pdb_name"].isna(), "idr_name"]
+    print("\nKeeping just the top alignment e-value:")
+    print('{0} PDBs from {1} unique IDRs of a total of {2} IDRs.'.format(len(ids1), len(np.unique(ids1)), len(df_idr_details_v2)))
+
     # Organizing and keeping just the 2D data for the selected alignemnt
     lst_ids = df_idr_details_v2.loc[~df_idr_details_v2.pdb_name.isna(), "internal_id"].tolist()
-    df_idr_2D = df_idr_2D.loc[df_idr_2D["internal_id"].isin(lst_ids), :]
+    df_2D_idr = df_2D_idr.loc[df_2D_idr["internal_id"].isin(lst_ids), :]
     df_ids = df_idr_details_v2.loc[~df_idr_details_v2.pdb_name.isna(), ["internal_id", prefix+"_name"]]
-    df_idr_2D = pd.merge(df_idr_2D, df_ids, how='left', on='internal_id')
-    df_idr_2D.drop('internal_id', axis=1, inplace=True)
-    df_idr_2D = df_idr_2D.sort_values(by=[prefix+'_name']).reset_index(drop=True)
-    col = df_idr_2D.pop(prefix+'_name')
-    df_idr_2D.insert(0, prefix+'_name', col)
+    df_2D_idr = pd.merge(df_2D_idr, df_ids, how='left', on='internal_id')
+    df_2D_idr.drop('internal_id', axis=1, inplace=True)
+    df_2D_idr = df_2D_idr.sort_values(by=[prefix+'_name']).reset_index(drop=True)
+    col = df_2D_idr.pop(prefix+'_name')
+    df_2D_idr.insert(0, prefix+'_name', col)
     
-    save_name = 'data_all_'+prefix+'.csv'
-    df_idr_details_v2 = mark_no_homologs(df_idr_details_v2, save_name)
+    save_name_all = 'data_all_'+prefix+'.csv'
+    df_idr_details_v2 = mark_no_homologs(basis_path, df_idr_details_v2, save_name_all)
     save_name = 'data_ss_'+prefix+'.csv'
-    df_idr_2D.to_csv(ANALYSIS_PATH+save_name, index=False)
-        
-    if (DEBUG_MODE):
-        pdb_data = pdb_data.loc[pdb_data["internal_id"].isin(lst_ids), :]
-        check1 = pdb_data.loc[:, [prefix+'_name', prefix+'_aa', prefix+'_final_seq_align_start',
-                                 'final_align_seq', 'final_align_pdb', 'final_align_ss', 
-                                 'ss_region_noSeq_gaps', 'over_dir', prefix+'_seq_diff', 
-                                 'class_gaps_seq_start', 'class_gaps_seq_before', 
-                                 'class_gaps_seq_start2', 'internal_id', 'pdb_name',
-                                 prefix+'_pdb_rel_start', prefix+'_pdb_rel_end', 
-                                 'final_region_seq', 'final_region_pdb', 
-                                 'region_pdb', 'region_seq']]
-        check_alignments(check1, prefix, BASIS_PATH+"examples/alignment_"+prefix+".txt")
+    df_2D_idr.to_csv(basis_path+save_name, index=False)
     
-    return df_idr_details_v2, df_idr_2D
+    return df_idr_details_v2, df_2D_idr, save_name_all
 
 
 def merge_idr_pdb(idrs_path, pdb_path, file_names, pdb_det_path, cutoff):
@@ -1553,12 +1517,12 @@ def merge_idr_pdb(idrs_path, pdb_path, file_names, pdb_det_path, cutoff):
     # to reduce the number of alignments and improve performance.
     eval_file = 'EVAL_data_noSeqs_idr.csv'
     df_idr_new = mark_no_homologs(basis_path, df_idr_new, eval_file)
-    return os.path.join(basis_path, eval_file)
+    return basis_path+eval_file
     
 
-def run_ss_annotation(idrs_path, pdb_mask_path, ss_file_path, dssp_path, idr_fasta_path, save_dup=True):
+def run_ss_annotation(idrs_path, pdb_mask_path, ss_file_path, dssp_path, idr_fasta_path, file_names, cutoff, save_dup=True):
     ''' Parts 3 - Main function IDR-PDB, getting the 2D structure and selecting 
-    best candidate. '''
+    best candidates. '''
     
     basis_path = resources.get_dir(idrs_path)+"/"+resources.get_filename(idrs_path)+"_"
     
@@ -1582,12 +1546,16 @@ def run_ss_annotation(idrs_path, pdb_mask_path, ss_file_path, dssp_path, idr_fas
     if save_dup:
         file_dup_idr = basis_path+'EVAL_data_dup_all.csv'
         df_idr_details.to_csv(file_dup_idr, index=False)
+        # df_idr_details = pd.read_csv(file_dup_idr)
         file_dup_ss = basis_path+'EVAL_data_dup_ss.csv'
         df_2D_idr.to_csv(file_dup_ss, index=False)
+        # df_2D_idr = pd.read_csv(file_dup_ss)
         file_dup_pdb = basis_path+'EVAL_data_dup_pdb.csv'
         pdb_data.to_csv(file_dup_pdb, index=False)
+        # pdb_data = pd.read_csv(file_dup_pdb)
     
-    df_idr_details, df_2D_idr = cross.remove_unmodeled_synthetic(df_idr_details, df_2D_idr, pdb_data, cutoff)
+    df_idr_details, df_2D_idr, idr_all_path = final_filtering(df_idr_details, df_2D_idr, pdb_data, basis_path, "idr", cutoff)
+    return basis_path+idr_all_path
     
     
     
