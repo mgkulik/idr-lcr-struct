@@ -273,9 +273,10 @@ def count_aas(seqs_path):
 
 ### POLY - IDR - PDB relations ###
 def extract_poly_idr_pdb(df_idr_details, df_poly, cutoff=.6, min_size=4):
-
+    ''' Filter all cases that overlap IDRs and PDB sequences. Important fields
+    from the IDRs are collected. '''
+    
     # Filtering the PDB important columns from the IDR perspective
-    df_idr_details = df_idr_details.loc[df_idr_details['idr_type']=='predicted', :]
     idrs_pos = df_idr_details.loc[:, ['idr_name', 'ss_final_over_sz', 'pdb_name', 'pdb_evalue',
        'bitscore', 'internal_id', 'internal_id2', 'seq_start', 'seq_end', 'pdb_start', 
        'pdb_end', 'hit_id', 'hsp_id', 'removed_on_s', 'removed_on', 'kept_on', 
@@ -308,6 +309,7 @@ def extract_poly_idr_pdb(df_idr_details, df_poly, cutoff=.6, min_size=4):
     IDs_seq = pd.unique(merged_pos.loc[long_bool, 'poly_name']).tolist()  
     df_poly_notSel = df_poly.loc[~df_poly['poly_name'].isin(IDs_seq), :]
     df_poly_new = pd.concat([merged_sel, df_poly_notSel])
+    df_poly_new["pdb_id"] = df_poly_new.pdb_name.str.split("_", n=1, expand=True)[0]
     
     return df_poly_new
 
@@ -319,7 +321,8 @@ def get_align_aa_counts(align_reg, pair1, pair2):
 
 
 ### MAIN POLY SESSION
-def run_poly(seqs_path, polyXY_path, idrcsv_path, n_aa, cutoff, min_size):
+def main_poly(seqs_path, polyXY_path, idrcsv_path, source, cutoff, min_size):
+    ''' Collecting poly info and their relation to IDRs. '''
     fasta_data,_,_ = resources.read_fasta(seqs_path)
     poly_lst = extract_polyXY_features(polyXY_path, fasta_data, n_aa)
     colnames = ["seq_name", "poly_name", "poly_num", "poly_start", "poly_end", 
@@ -331,14 +334,12 @@ def run_poly(seqs_path, polyXY_path, idrcsv_path, n_aa, cutoff, min_size):
     pd_poly['proteome_poly_id'] = resources.extract_proteome(seqs_path)
     pd_poly = pd_poly.sort_values(by=['seq_name', 'poly_start', 'poly_end'])
     
-    if (n_aa==1):
+    if (source == "polyx"):
         #Use it when processing just PolyX. This data will not be used
-        source = "polyx"
         pd_poly = pd_poly.drop(columns={"prop_polar", "prop_non_polar", "poly_part1", "poly_part2", "poly_part1_tp", "poly_part2_tp"})
         
     else:
         # Don't run this for polyX. Makes sense when we have more than 2 different AAs
-        source = "polyxy"
         pd_poly = generate_poly_groups(pd_poly)
     
     # Annotating the polyX/Ys inside IDRs
@@ -350,10 +351,13 @@ def run_poly(seqs_path, polyXY_path, idrcsv_path, n_aa, cutoff, min_size):
 
 
 ### MAIN IDR POLY SESSION
-def run_idr_poly_pdb(df_idr_details, df_poly_details, pdb_mask_path, dssp_path, file_names, path_sel_coords, ssSeq_path, polyidr_path, polyss_path):
+def main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, cutoff, min_size):
+    ''' Now crossing Poly with PDBs. '''
 
+    df_idr_details = pd.read_csv(idr_all_path, low_memory=False)
+    df_poly_details = pd.read_csv(poly_details_path, low_memory=False)
     # Getting IDR side of the overlaps (list of PolyXYs and coverage with PDB)
-    df_poly_details = extract_poly_idr_pdb(df_idr_details, df_poly_details)
+    df_poly_details = extract_poly_idr_pdb(df_idr_details, df_poly_details, cutoff, min_size)
         
     # get the details of the PDB and SEQ alignment
     df_poly_details = cross.append_pdb_details(pdb_mask_path, df_poly_details)

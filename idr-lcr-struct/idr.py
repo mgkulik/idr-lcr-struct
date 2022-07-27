@@ -21,6 +21,8 @@ import os
 import resources
 import coil
 
+from localcider.sequenceParameters import SequenceParameters
+
 pd.options.display.max_columns = 30
 
 def get_entry_info(vals):
@@ -203,7 +205,70 @@ def get_score2regions(pd_idrs, tabidr_path, tsh=.5, kmer=20):
     tabidr_path = tabidr_path.replace("dbase", "dbase/scores_sym")
     save_file(tab_rows, tabidr_path)
     return tabidr_path
-       
+
+
+def report_execution(start_time, name):
+    ''' Return for how long this step runned. '''
+    tot_in_sec = time.time() - start_time
+    print("\nProp ", name, " calculated...")
+    print("--- %s seconds ---" % (tot_in_sec))
+
+
+def get_cider_props(idr_details_path, prefix):
+    ''' Calculates IDR properties using cider. '''
+    df_idr_details = pd.read_csv(idr_details_path, low_memory=False)
+    start_time = time.time()
+    print("\nStarting the properties calculation with cider.\nRelax, this can take some hours...")
+    seqs_base = df_idr_details.loc[:, [prefix+'_name', prefix+'_aa']]
+    seqs_base[prefix+'_WithXU'] = seqs_base[prefix+'_aa'].apply(lambda x: 0 if x.find('(?:X|U)')==-1 else x.find('(?:X|U)'))
+    seqs_base[prefix+'_NoXU'] = seqs_base[prefix+'_aa'].str.replace('(?:X|U)', '', regex=True)
+    seqs_base[prefix+'_par'] = seqs_base[prefix+'_NoXU'].apply(lambda x: SequenceParameters(x))
+    seqs_base['fcr'] = seqs_base[prefix+'_par'].apply(lambda x: x.get_FCR())
+    report_execution(start_time, list(seqs_base.columns)[-1])
+    seqs_base['ncpr'] = seqs_base[prefix+'_par'].apply(lambda x: x.get_NCPR())
+    report_execution(start_time, list(seqs_base.columns)[-1])
+    seqs_base['isoPoint'] = seqs_base[prefix+'_par'].apply(lambda x: x.get_isoelectric_point())
+    report_execution(start_time, list(seqs_base.columns)[-1])
+    seqs_base['molWeight'] = seqs_base[prefix+'_par'].apply(lambda x: x.get_molecular_weight())
+    report_execution(start_time, list(seqs_base.columns)[-1])
+    seqs_base['fracNeg'] = seqs_base[prefix+'_par'].apply(lambda x: x.get_fraction_negative())
+    report_execution(start_time, list(seqs_base.columns)[-1])
+    seqs_base['fracPos'] = seqs_base[prefix+'_par'].apply(lambda x: x.get_fraction_positive())
+    report_execution(start_time, list(seqs_base.columns)[-1])
+    seqs_base['countNeg'] = seqs_base[prefix+'_par'].apply(lambda x: x.get_countNeg())
+    report_execution(start_time, list(seqs_base.columns)[-1])
+    seqs_base['countPos'] = seqs_base[prefix+'_par'].apply(lambda x: x.get_countPos())
+    report_execution(start_time, list(seqs_base.columns)[-1])
+    seqs_base['countNeut'] = seqs_base[prefix+'_par'].apply(lambda x: x.get_countNeut())
+    report_execution(start_time, list(seqs_base.columns)[-1])
+    seqs_base['promDisord'] = seqs_base[prefix+'_par'].apply(lambda x: x.get_fraction_disorder_promoting())
+    report_execution(start_time, list(seqs_base.columns)[-1])
+    seqs_base['kappa'] = seqs_base[prefix+'_par'].apply(lambda x: x.get_kappa())
+    report_execution(start_time, list(seqs_base.columns)[-1])
+    seqs_base['omega'] = seqs_base[prefix+'_par'].apply(lambda x: x.get_Omega())
+    report_execution(start_time, list(seqs_base.columns)[-1])
+    seqs_base['meanNCharge'] = seqs_base[prefix+'_par'].apply(lambda x: x.get_mean_net_charge())
+    report_execution(start_time, list(seqs_base.columns)[-1])
+    seqs_base['meanHydro'] = seqs_base[prefix+'_par'].apply(lambda x: x.get_mean_hydropathy())
+    report_execution(start_time, list(seqs_base.columns)[-1])
+    seqs_base['uverskyHydro'] = seqs_base[prefix+'_par'].apply(lambda x: x.get_uversky_hydropathy())
+    report_execution(start_time, list(seqs_base.columns)[-1])
+    seqs_base['ppiiPropHilser'] = seqs_base[prefix+'_par'].apply(lambda x: x.get_PPII_propensity(mode='hilser'))
+    report_execution(start_time, list(seqs_base.columns)[-1])
+    seqs_base['ppiiPropCreamer'] = seqs_base[prefix+'_par'].apply(lambda x: x.get_PPII_propensity(mode='creamer'))
+    report_execution(start_time, list(seqs_base.columns)[-1])
+    seqs_base['ppiiPropKallenbach'] = seqs_base[prefix+'_par'].apply(lambda x: x.get_PPII_propensity(mode='kallenbach'))
+    report_execution(start_time, list(seqs_base.columns)[-1])
+    seqs_base['delta'] = seqs_base[prefix+'_par'].apply(lambda x: x.get_delta())
+    report_execution(start_time, list(seqs_base.columns)[-1])
+    seqs_base['deltaMax'] = seqs_base[prefix+'_par'].apply(lambda x: x.get_deltaMax())
+    report_execution(start_time, list(seqs_base.columns)[-1])
+    
+    seqpar_path = resources.get_dir(idr_details_path)+"/"+resources.get_filename(idr_all_path)+"_data_idr_properties.csv"
+    seqs_base.to_csv(seqpar_path, index=False)
+    tot_in_sec = time.time() - start_time
+    print("\n--- Total cider time: %s seconds ---" % (tot_in_sec))
+
 
 def run_all(fastaname, tabidr_path, use_toolscores=False):
 

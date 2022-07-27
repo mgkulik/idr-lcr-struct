@@ -20,6 +20,7 @@ import re
 import math
 
 import resources
+import pdbDssp
 
 pd.options.display.max_columns = 50
 
@@ -1473,7 +1474,29 @@ def final_filtering(df_idr_details, df_2D_idr, pdb_data, basis_path, prefix, cut
     return df_idr_details_v2, df_2D_idr, save_name_all
 
 
-def merge_idr_pdb(idrs_path, pdb_path, file_names, pdb_det_path, cutoff):
+def correct_pdb_coords(pdb_coords, df_idr_details, idr_all_path, prefix="idr"):
+    ''' Adjust PDB coordinates using the AUTH information extracted from CIF files. '''
+    
+    # Extracting only the columns of interest from both files
+    cols = ["pdb_name", "dbrefs_start", "dbrefs_auth_start"]
+    pdb_coords_sel = pdb_coords.loc[:, cols]
+    pdb_coords_sel = pdb_coords_sel.astype({"dbrefs_start":"int32", "dbrefs_auth_start":"int32"})
+    pdb_coords_sel["dbrefs_real_start"] = pdb_coords_sel["dbrefs_auth_start"]-pdb_coords_sel["dbrefs_start"]
+    cols = [prefix+"_name", "pdb_name", prefix+"_pdb_rel_start", "over_ss_real_sz"]
+    df_idr_details_sel = df_idr_details.loc[~df_idr_details["pdb_name"].isna(), cols]
+    df_idr_details_sel = pd.merge(df_idr_details_sel, pdb_coords_sel, how="left", on="pdb_name")
+    
+    # Generating final coordinates
+    df_idr_details_sel[prefix+'_dbrefs_auth_start'] = df_idr_details_sel[prefix+"_pdb_rel_start"]+df_idr_details_sel["dbrefs_real_start"]
+    df_idr_details_sel[prefix+'_dbrefs_auth_end'] = df_idr_details_sel[prefix+"_pdb_rel_start"] + df_idr_details_sel["dbrefs_real_start"]+df_idr_details_sel['over_ss_real_sz']-1
+    df_idr_details_sel = df_idr_details_sel.drop(['pdb_name', prefix+'_pdb_rel_start', 'over_ss_real_sz'], axis=1)
+       
+    df_idr_details = pd.merge(df_idr_details, df_idr_details_sel, how="left", on=prefix+"_name")
+    df_idr_details.to_csv(idr_all_path, index=False)
+    return df_idr_details
+
+
+def main_merge_idrPdb(idrs_path, pdb_path, file_names, pdb_det_path, cutoff):
     ''' Parts 1 and 2 - Main function IDR-PDB, filtering just synthetic strucures. '''
     # This process can take several minutes to run.
     
@@ -1485,20 +1508,17 @@ def merge_idr_pdb(idrs_path, pdb_path, file_names, pdb_det_path, cutoff):
     # Dumping numpy objects to disk to save memory
     pickle_sz=10e+05
     
-    print()
-    print("Making the XML file provided by blastP easier to my use...")    
+    print("\nMaking the XML file provided by blastP easier to my use...")    
     # Starting with the extraction of each blast pair from the xml file
     blast_pickle = extract_blast_pairs(pdb_path, pickle_sz, sep1, sep2)
     df_idr = pd.read_csv(idrs_path)
     
     # Replicating the PDBs and IDRs to extract Positions, E-value and unique IDSs an all other relevant alignment data
-    print()
-    print("Taking the starts and ends of the matches from the blastP output.")
+    print("\nTaking the starts and ends of the matches from the blastP output.")
     
     idx_million = positions2array(df_idr, blast_pickle, (0,8,9), ['idr_start', 'idr_end'], pickle_sz, 'starts_ends')
     
-    print()
-    print("Taking the rest of the thingies I need to use from blastP output.")
+    print("\nTaking the rest of the thingies I need to use from blastP output.")
     get_another_data(df_idr, blast_pickle, idx_million, (0,1,2,5,6,4,10,11,12,7,14,15,16,8,9), 
                                    ['idr_name', 'idr_size'], pickle_sz, (1,1), file_names)
     
@@ -1520,7 +1540,7 @@ def merge_idr_pdb(idrs_path, pdb_path, file_names, pdb_det_path, cutoff):
     return basis_path+eval_file
     
 
-def run_ss_annotation(idrs_path, pdb_mask_path, ss_file_path, dssp_path, idr_fasta_path, file_names, cutoff, save_dup=True):
+def main_ss_annotation(idrs_path, pdb_mask_path, ss_file_path, dssp_path, idr_fasta_path, file_names, cutoff, save_dup=True):
     ''' Parts 3 - Main function IDR-PDB, getting the 2D structure and selecting 
     best candidates. '''
     
@@ -1556,6 +1576,27 @@ def run_ss_annotation(idrs_path, pdb_mask_path, ss_file_path, dssp_path, idr_fas
     
     df_idr_details, df_2D_idr, idr_all_path = final_filtering(df_idr_details, df_2D_idr, pdb_data, basis_path, "idr", cutoff)
     return basis_path+idr_all_path
+    
+    
+def main_pos_files(idr_all_path, pdb_files, path_pdb_files):
+    ''' Parts 4 - Main function IDR-PDB, getting the real PDB coordinates from
+    the PDB files and adding to the detailed file. '''
+    
+    basis_path = resources.get_dir(idr_all_path)+"/"+resources.get_filename(idr_all_path)+"_"
+    
+    df_idr_details = pd.read_csv(idr_all_path, low_memory=False)
+    cif_ids = np.unique(df_idr_details.loc[~df_idr_details["pdb_name"].isna(), "pdb_id"]).tolist()
+    missing = pdbDssp.manage_missing(path_pdb_files, cif_ids, "-c", False) # ?? Need to delete previous files ??
+    if len(missing)>0:
+        file_name = basis_path +"sitll_missing_cif_list.txt"
+        resources.save_sep_file(missing, file_name)
+        print("ATENTION: There are still some CIF files we were not able to download.\nCheck the file sitll_missing_cif_list.txt and try to download them manually.\nWe will move on now considering the files available on disk!")
+    df_pdb_coords, df_chain = pdbDssp.extract_from_cif_all(path_pdb_files, cif_ids)
+    path_coords = basis_path+"coords_pdb.csv"
+    path_chains = basis_path+"chains_pdb.csv"
+    df_pdb_coords.to_csv(path_coords, index=False)
+    df_chain.to_csv(path_chains, index=False)
+    correct_pdb_coords(df_pdb_coords, df_idr_details, idr_all_path, "idr")
     
     
     
