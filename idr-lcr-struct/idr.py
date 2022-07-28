@@ -264,7 +264,7 @@ def get_cider_props(idr_details_path, prefix):
     seqs_base['deltaMax'] = seqs_base[prefix+'_par'].apply(lambda x: x.get_deltaMax())
     report_execution(start_time, list(seqs_base.columns)[-1])
     
-    seqpar_path = resources.get_dir(idr_details_path)+"/"+resources.get_filename(idr_all_path)+"_data_idr_properties.csv"
+    seqpar_path = resources.get_dir(idr_details_path)+"/"+resources.get_filename(idr_details_path)+"_data_idr_properties.csv"
     seqs_base.to_csv(seqpar_path, index=False)
     tot_in_sec = time.time() - start_time
     print("\n--- Total cider time: %s seconds ---" % (tot_in_sec))

@@ -1479,7 +1479,7 @@ def correct_pdb_coords(pdb_coords, df_idr_details, idr_all_path, prefix="idr"):
     
     # Extracting only the columns of interest from both files
     cols = ["pdb_name", "dbrefs_start", "dbrefs_auth_start"]
-    pdb_coords_sel = pdb_coords.loc[:, cols]
+    pdb_coords_sel = pdb_coords.loc[pdb_coords["pdb_ref_db"]!="PDB", cols]
     pdb_coords_sel = pdb_coords_sel.astype({"dbrefs_start":"int32", "dbrefs_auth_start":"int32"})
     pdb_coords_sel["dbrefs_real_start"] = pdb_coords_sel["dbrefs_auth_start"]-pdb_coords_sel["dbrefs_start"]
     cols = [prefix+"_name", "pdb_name", prefix+"_pdb_rel_start", "over_ss_real_sz"]

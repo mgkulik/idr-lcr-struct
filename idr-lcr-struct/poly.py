@@ -319,6 +319,13 @@ def get_align_aa_counts(align_reg, pair1, pair2):
     c = collections.Counter(align_reg)
     return pd.Series((c[pair1], c[pair2]))
 
+def final_2Ddata(df_poly_details, df_2D_details):
+    df_poly_details_simp = df_poly_details.loc[~df_poly_details["pdb_name"].isna(), ["poly_name", "poly_pairs1", "poly_pairs2"]]
+    df_2D_details = pd.merge(df_2D_details, df_poly_details_simp, how="left", on="poly_name")
+    df_2D_details[['cnt_pair1_align','cnt_pair2_align']] = df_2D_details.apply(lambda x: get_align_aa_counts(x['poly_seq'], x['poly_pairs1'], x['poly_pairs2']), axis=1)
+    df_2D_details = df_2D_details.drop({"poly_pairs1", "poly_pairs2"}, axis=1)
+    return df_2D_details
+
 
 ### MAIN POLY SESSION
 def main_poly(seqs_path, polyXY_path, idrcsv_path, source, cutoff, min_size):
@@ -351,8 +358,13 @@ def main_poly(seqs_path, polyXY_path, idrcsv_path, source, cutoff, min_size):
 
 
 ### MAIN IDR POLY SESSION
-def main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, cutoff, min_size):
+def main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, file_names, source, cutoff, min_size):
     ''' Now crossing Poly with PDBs. '''
+    
+    basis_path = resources.get_dir(idr_all_path)+"/"+resources.get_filename(idr_all_path)+"_"
+    
+    if len(file_names)==5:
+        file_names.insert(0, 'starts_ends')
 
     df_idr_details = pd.read_csv(idr_all_path, low_memory=False)
     df_poly_details = pd.read_csv(poly_details_path, low_memory=False)
@@ -361,66 +373,13 @@ def main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, cutoff, min_si
         
     # get the details of the PDB and SEQ alignment
     df_poly_details = cross.append_pdb_details(pdb_mask_path, df_poly_details)
-    # Now we can calculate the PolyXY ss_region using the same function
-    df_poly_details, df_2D_details, _ = cross.get_dssp_idr(dssp_path, blast_over_path, df_poly_details, 50)
+    # Now we can calculate the PolyXY ss_region using the same functions. The filtering step is not required
+    df_poly_details, df_2D_details, _ = cross.get_dssp_idr(dssp_path, basis_path+file_names[-1]+".pickle", df_poly_details, "poly", 50)
     df_poly_details = cross.correct_pdb_coords(path_sel_coords, df_poly_details, ssSeq_path, polyidr_path)
+    polyall_path = "data_all_"+source+".csv"
+    _ = mark_no_homologs(basis_path, df_poly_details, polyall_path)
     
-    df_poly_details_simp = df_poly_details.loc[~df_poly_details["pdb_name"].isna(), ["poly_name", "poly_pairs1", "poly_pairs2"]]
-    df_2D_details = pd.merge(df_2D_details, df_poly_details_simp, how="left", on="poly_name")
-    df_2D_details[['cnt_pair1_align','cnt_pair2_align']] = df_2D_details.apply(lambda x: get_align_aa_counts(x['poly_seq'], x['poly_pairs1'], x['poly_pairs2']), axis=1)
-    df_2D_details = df_2D_details.drop({"poly_pairs1", "poly_pairs2"}, axis=1)
+    df_2D_details = final_2Ddata(df_poly_details, df_2D_details)
+    polyss_path = basis_path+"data_ss_"+source+".csv"
     df_2D_details.to_csv(polyss_path, index=False)
-    return df_poly_details, df_2D_details
-
-
-def run_idr_poly_global(df_idr_details, df_poly):
-    # Getting IDR coverage area based on all PolyXYs over the IDR
-    cols = ['over_sz_idr', 'idr_size', 'tot_polar_idr', 'tot_non_polar_idr', 
-            'poly_start_idr', 'poly_end_idr']
-    df_idr_details = merge_poly_coverage(df_poly_details, cols, df_idr_details)
-    
-    cols = ['seq_aa', 'poly_coords_idr', 'idr_start', 'idr_end']
-    df_idr_details = extract_region_noPoly(df_idr_details, cols)
-    
-    # Getting IDR side of the overlaps (list of PolyXYs and coverage with PDB)
-    comp = "pdb"
-    cols = ['ss_over_sz', 'ss_over_idr_sz', 'idr_name', 
-            'poly_seq_align_start', 'poly_seq_align_end','tot_polar_pdb', 
-            'tot_non_polar_pdb', 'poly_seq_rel_start', 'poly_seq_rel_end']
-    df_idr_details = merge_poly_coverage(df_poly_details, cols, df_idr_details, comp, 'pdb_name')
-    cols = ['seq_aa', 'poly_coords_pdb', 'idr_seq_rel_start', 'idr_seq_rel_end']
-    df_idr_details = merge_poly_ss_coverage(df_2D_details, df_poly_details, df_idr_details)
-    df_idr_details = extract_region_noPoly(df_idr_details, cols, 'pdb')
-    
-    # Extracting the SS region for the IDR region not covered by PolyXYs
-    cols = ['final_align_ss', 'poly_coords_ss', 'idr_seq_align_start', 'idr_seq_align_end']
-    df_idr_details = extract_region_noPoly(df_idr_details, cols, 'ss')
-    
-    cols = list(df_idr_details.columns[[i for i,x in enumerate(df_idr_details.columns) if x == "poly_over_idr"][0]:])
-    df_idr_details = df_idr_details.loc[~df_idr_details['poly_over_idr'].isna(), ["idr_name"]+cols]
-    #df_idr_details.to_csv(idrpoly_path, index=False)
-    
-    # Counting the Poly pairs (this doesn't change)
-    df_pairs_poly = count_pairs(seqs_path, 2, True)
-    # Pablo suggested me to count all to check for possible bias in sequences with repeated regions
-    # As expected the difference is thin. I'll check with both.
-    df_pairs_all = count_pairs(seqs_path, 2, True)
-    df_pairs_all.to_csv('analysis/data_pairs_all.csv', index=False)
-    ssprop_lst, ss_counts, ss_props = cross.count_dssp_seqs(dssp_path, df_poly_details)
-    
-    df_aa_all = count_aas(seqs_path)
-    df_aa_all.to_csv('analysis/data_aa_all.csv', index=False)
-    
-
-def run_properties():
-    _ = get_idr_properties.get_cider_props(df_poly_details, polypar_path, pref)
-
-#pref='poly'
-#df_poly = pd.read_csv(polycsv_path)
-#df_poly_new = pd.read_csv('analysis_masked/data_noSeqs_'+pref+'.csv')
-#df_poly_details = pd.read_csv(polycsv_path)
-#df_poly_details = pd.read_csv(polyidr_path)
-
-#file_names=['evalues_'+pref+'.pickle', 'idr_sizes_'+pref+'.pickle', 
-#                'unique_ids_'+pref+'.pickle', 'gen_info_'+pref+'.pickle', 
-#                'blast_over_'+pref+'.pickle']
+    return basis_path+polyall_path, polyss_path

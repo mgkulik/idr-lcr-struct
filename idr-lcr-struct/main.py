@@ -276,6 +276,11 @@ if (int(num_sel)==1 or int(num_sel)==6):
         if not "pdb_mask_path" in locals_var:
             message = "No previous masked file located in the pdb folder.\nYou can't execute this step before execute step 0."
             pdb_mask_path = resources.get_pdbOut_names(pdb_files, '_pdb_masked.txt', message)
+            
+        if not "dssp_path" in locals_var:
+            message = "No previous 2D pickle file located in the pdb folder.\nYou can't execute this step before execute step 0."
+            dssp_path = resources.get_pdbOut_names(pdb_files, '_ss_masked.pickle', message)
         
-    poly_all_path = poly.main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, float(cutoff), int(min_size))
-    
+    poly_all_path, polyss_path = poly.main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, file_names, source, float(cutoff), int(min_size))
+    print("ALL STEPS FINISHED.")
+    print("Poly details ({0}) and Poly 2D data were saved to disk\n\nENJOY!!!.".format(os.path.basename(poly_all_path), os.path.basename(polyss_path)))
