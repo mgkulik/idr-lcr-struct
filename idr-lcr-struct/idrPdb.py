@@ -1217,8 +1217,8 @@ def prepare_ss_counts(df_ss, linker_id, dir_name="", cut="", prefix="idr"):
         ss_counts, ss_props, _  = count_dssp(idr_ss)
         ss_map=np.empty([1,1])
     
-    df_ss["str1"] = df_ss[cols[3]].str.replace("|", "")
-    df_ss["str2"] = df_ss[cols[2]].str.replace("|", "")
+    df_ss["str1"] = df_ss[cols[3]].str.replace(r'\D+', "", regex=True)
+    df_ss["str2"] = df_ss[cols[2]].str.replace(r'\D+', "", regex=True)
     df_ss["hamm_dist"] = df_ss.apply(lambda x: calc_hamming_distance(x["str1"], x["str2"]) if len(x["str1"])>0 else np.nan, axis=1)
     df_ss['sum_of_pairs'] = df_ss.apply(lambda x: sum(calc_sum_of_pairs(x["str1"], x["str2"], blosum, -5, -1)) if len(x["str1"])>0 else np.nan, axis=1)
     
@@ -1269,7 +1269,7 @@ def prepare_ss_counts(df_ss, linker_id, dir_name="", cut="", prefix="idr"):
     return df_dist2D, ss_map
 
 
-def get_dssp_idr(dssp_path, blast_over_path, df_idr_details, prefix="idr", delim=0):
+def get_dssp_idr(dssp_path, blast_over_path, df_idr_details, basis_path, prefix="idr", delim=0, source="polyxy"):
     ''' Take all the cases that paired to PDB structures and extract the region
     aligned to the IDR related to 2D sequences, considering the gaps generated
     by the alignment. '''
@@ -1375,7 +1375,7 @@ def get_dssp_idr(dssp_path, blast_over_path, df_idr_details, prefix="idr", delim
             
             map_50aa = np.hstack([ss_map_left, ss_map_right])
             map_50aa = map_50aa[pdb_data_ids, :]
-            np.savetxt(BASIS_PATH+prefix+"_map_50aa.csv", map_50aa, fmt="%d", delimiter=",")
+            np.savetxt(basis_path+"map_"+str(delim)+"aa_"+source+".csv", map_50aa, fmt="%d", delimiter=",")
               
     sel_cols = ['internal_id', prefix+'_name', 'ss_final_over_sz', 'tot_polar_pdb','tot_non_polar_pdb',
                 prefix+'_pdb_rel_start', prefix+'_pdb_rel_end', 
@@ -1572,7 +1572,7 @@ def main_ss_annotation(idrs_path, pdb_mask_path, ss_file_path, dssp_path, idr_fa
     # Need to add sequence details first to validate the real sequence start/end
     # position of the alignment later
     df_idr_details = append_seq_details(idr_fasta_path, df_idr_details)
-    df_idr_details, df_2D_idr, pdb_data = get_dssp_idr(dssp_path, basis_path+file_names[5]+".pickle", df_idr_details)
+    df_idr_details, df_2D_idr, pdb_data = get_dssp_idr(dssp_path, basis_path+file_names[5]+".pickle", df_idr_details, basis_path)
     
     if save_dup:
         file_dup_idr = basis_path+'EVAL_data_dup_all.csv'

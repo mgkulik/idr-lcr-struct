@@ -163,6 +163,7 @@ def generate_poly_groups(df_poly_details):
 
 ### IDR COVERAGE by POLY ###
 def extract_poly_idr(idrcsv_path, df_poly, cutoff=.6, min_size=6):
+    ''' Add the information of all IDRs to the poly annotations. '''
 
     df_idr_details = pd.read_csv(idrcsv_path)
     idrs_pos = df_idr_details.loc[:, ['seq_name', 'idr_name', 'idr_size', 'idr_start', 'idr_end']]
@@ -201,75 +202,6 @@ def extract_poly_idr(idrcsv_path, df_poly, cutoff=.6, min_size=6):
     
     return df_poly_new
 
-
-def count_seq_pairs(sequence, k_mer=2, acc_pairs=True):
-    """Generate the slide for each integer for each amino-acid"""
-    seq_int_slide = []
-    sequence = [aa for aa in sequence]
-    seq = np.array(sequence)
-    n = len(sequence)
-    xcol = np.arange(n-k_mer+1)
-    inds_col = np.tile(np.arange(k_mer), (n-k_mer+1,1))
-    inds_row = np.tile(xcol, (k_mer,1)).transpose()
-    seq_int_slide_ori = seq[inds_col + inds_row]
-    #    inds2 = xcol.reshape(int((n-1)/2), 2)
-    #    seq_int_slide_ori = seq[inds2]
-    seq_int_slide = seq_int_slide_ori.copy()
-    # I'll accumulate the inverse pairs (XY and YX) for now, but make it flexible
-    # if we decide not to accumulate in te future.
-    if acc_pairs:
-        check_inv = seq_int_slide_ori[:,0]>seq_int_slide_ori[:,1]
-        seq_int_slide[check_inv, 0] = seq_int_slide_ori[check_inv,1]
-        seq_int_slide[check_inv, 1] = seq_int_slide_ori[check_inv,0]        
-    #check_dif = seq_int_slide[:,0]!=seq_int_slide[:,1]
-    #seq_int_slide = seq_int_slide[check_dif, :]
-    pairs_rep = np.apply_along_axis(''.join, 1, seq_int_slide)
-    pairs = pd.DataFrame(np.transpose(np.array(np.unique(pairs_rep, return_counts=True))),
-                         columns=['poly_pair_simp', 'cnt'])
-    pairs = pairs.set_index('poly_pair_simp')
-    pairs = pairs.astype(int)
-    return pairs
-
-
-def count_pairs(polyXYfas_path, k_mer=2, acc_pairs=True):
-    seq_dict = cross.load_seqs(polyXYfas_path)
-    i=0
-    for vals in seq_dict.values():
-        i+=1
-        pairs = count_seq_pairs(vals[0], k_mer, acc_pairs)
-        if i==1:
-            df_pairs = pairs.copy()
-        else:
-            df_pairs = df_pairs.merge(pairs, how="outer", on="poly_pair_simp").fillna(0)
-            #if "QX" in df_pairs.index:
-            #    break
-            df_pairs = pd.DataFrame(df_pairs.sum(axis=1), columns=['cnt'])
-        df_pairs = df_pairs.sort_index()
-    df_pairs['prop'] = df_pairs['cnt']/int(df_pairs.sum(axis=0))
-    #df_pairs = df_pairs.sort_index()
-    df_pairs = df_pairs.sort_values(by='prop')
-    df_pairs = df_pairs.reset_index()
-    df_pairs['poly_pairs1_int'] = df_pairs['poly_pair_simp'].apply(lambda x: AA_CODE_DICT[x[0]])
-    df_pairs['poly_pairs2_int'] = df_pairs['poly_pair_simp'].apply(lambda x: AA_CODE_DICT[x[1]])
-    return df_pairs.iloc[:, [0,-2,-1,1,2]]
-
-def count_aas(seqs_path):
-    seq_dict = cross.load_seqs(seqs_path)
-    i=0
-    cnt_mat = np.empty([len(seq_dict), len(AA_CODE_LIST)], dtype=int)
-    for k, vals in seq_dict.items():
-        #print(k + " - " + str(i))
-        chars = np.array([AA_CODE_LIST.index(r) for r in vals[0]])
-        cnt_mat[i] = np.bincount(chars, minlength=len(AA_CODE_LIST))
-        i += 1
-    tot = np.sum(cnt_mat, 0)
-    tot_frac = tot/np.sum(tot)
-    tot = np.stack([AA_CODE_LIST, tot, tot_frac], 1)
-    tot = np.delete(tot, 0, 0)
-    df_aas = pd.DataFrame(tot, columns=['poly_pairs','cnt', 'prop'])
-    df_aas = df_aas.astype({'cnt': 'int32', 'prop': 'float32'})
-    return (df_aas)
-        
 
 ### POLY - IDR - PDB relations ###
 def extract_poly_idr_pdb(df_idr_details, df_poly, cutoff=.6, min_size=4):
@@ -358,7 +290,7 @@ def main_poly(seqs_path, polyXY_path, idrcsv_path, source, cutoff, min_size):
 
 
 ### MAIN IDR POLY SESSION
-def main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, file_names, source, cutoff, min_size):
+def main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, file_names, path_coords, source, cutoff, min_size):
     ''' Now crossing Poly with PDBs. '''
     
     basis_path = resources.get_dir(idr_all_path)+"/"+resources.get_filename(idr_all_path)+"_"
@@ -374,12 +306,13 @@ def main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, fil
     # get the details of the PDB and SEQ alignment
     df_poly_details = cross.append_pdb_details(pdb_mask_path, df_poly_details)
     # Now we can calculate the PolyXY ss_region using the same functions. The filtering step is not required
-    df_poly_details, df_2D_details, _ = cross.get_dssp_idr(dssp_path, basis_path+file_names[-1]+".pickle", df_poly_details, "poly", 50)
-    df_poly_details = cross.correct_pdb_coords(path_sel_coords, df_poly_details, ssSeq_path, polyidr_path)
-    polyall_path = "data_all_"+source+".csv"
-    _ = mark_no_homologs(basis_path, df_poly_details, polyall_path)
+    df_poly_details, df_2D_details, _ = cross.get_dssp_idr(dssp_path, basis_path+file_names[-1]+".pickle", df_poly_details, basis_path, "poly", 50, source)
+    poly_all_path = "data_all_"+source+".csv"
+    _ = cross.mark_no_homologs(basis_path, df_poly_details, poly_all_path)
+    df_pdb_coords = pd.read_csv(path_coords)
+    cross.correct_pdb_coords(df_pdb_coords, df_poly_details, poly_all_path, "poly")
     
     df_2D_details = final_2Ddata(df_poly_details, df_2D_details)
     polyss_path = basis_path+"data_ss_"+source+".csv"
     df_2D_details.to_csv(polyss_path, index=False)
-    return basis_path+polyall_path, polyss_path
+    return basis_path+poly_all_path, polyss_path
