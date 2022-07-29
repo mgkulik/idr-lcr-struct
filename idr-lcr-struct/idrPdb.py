@@ -1478,18 +1478,29 @@ def correct_pdb_coords(pdb_coords, df_idr_details, idr_all_path, prefix="idr"):
     ''' Adjust PDB coordinates using the AUTH information extracted from CIF files. '''
     
     # Extracting only the columns of interest from both files
-    cols = ["pdb_name", "dbrefs_start", "dbrefs_auth_start"]
-    pdb_coords_sel = pdb_coords.loc[pdb_coords["pdb_ref_db"]!="PDB", cols]
+    cols = ["pdb_name", "dbrefs_start", "dbrefs_auth_start", "pdb_ref_db"]
+    pdb_coords_sel = pdb_coords.loc[:, cols]
     pdb_coords_sel = pdb_coords_sel.astype({"dbrefs_start":"int32", "dbrefs_auth_start":"int32"})
     pdb_coords_sel["dbrefs_real_start"] = pdb_coords_sel["dbrefs_auth_start"]-pdb_coords_sel["dbrefs_start"]
+        
     cols = [prefix+"_name", "pdb_name", prefix+"_pdb_rel_start", "over_ss_real_sz"]
     df_idr_details_sel = df_idr_details.loc[~df_idr_details["pdb_name"].isna(), cols]
     df_idr_details_sel = pd.merge(df_idr_details_sel, pdb_coords_sel, how="left", on="pdb_name")
     
+    # Some PDB structures have more than one set of coordinates.
+    # Selecting the one right before the IDR start.
+    df_idr_details_sel["before"] = df_idr_details_sel["dbrefs_start"]<=df_idr_details_sel[prefix+"_pdb_rel_start"]
+    # Order by the information of the coords being before the IDR start
+    df_idr_details_sel = df_idr_details_sel.sort_values(by=[prefix+"_name", "pdb_ref_db", "before", "dbrefs_start"], ascending=[True, False, False, False])
+    # Keeping only the first match.
+    df_idr_details_sel["cumSum"] = df_idr_details_sel.groupby(prefix+"_name").cumcount()+1
+    df_idr_details_sel = df_idr_details_sel.loc[df_idr_details_sel["cumSum"]==1, :]
+    df_idr_details_sel = df_idr_details_sel.sort_values(by=[prefix+"_name", "dbrefs_start"], ascending=[True, False]).drop_duplicates(subset=[prefix+'_name'])
+    
     # Generating final coordinates
     df_idr_details_sel[prefix+'_dbrefs_auth_start'] = df_idr_details_sel[prefix+"_pdb_rel_start"]+df_idr_details_sel["dbrefs_real_start"]
     df_idr_details_sel[prefix+'_dbrefs_auth_end'] = df_idr_details_sel[prefix+"_pdb_rel_start"] + df_idr_details_sel["dbrefs_real_start"]+df_idr_details_sel['over_ss_real_sz']-1
-    df_idr_details_sel = df_idr_details_sel.drop(['pdb_name', prefix+'_pdb_rel_start', 'over_ss_real_sz'], axis=1)
+    df_idr_details_sel = df_idr_details_sel.drop(['pdb_name', prefix+'_pdb_rel_start', 'over_ss_real_sz', 'before', 'cumSum', 'pdb_ref_db'], axis=1)
        
     df_idr_details = pd.merge(df_idr_details, df_idr_details_sel, how="left", on=prefix+"_name")
     df_idr_details.to_csv(idr_all_path, index=False)
@@ -1597,6 +1608,4 @@ def main_pos_files(idr_all_path, pdb_files, path_pdb_files):
     df_pdb_coords.to_csv(path_coords, index=False)
     df_chain.to_csv(path_chains, index=False)
     correct_pdb_coords(df_pdb_coords, df_idr_details, idr_all_path, "idr")
-    
-    
     

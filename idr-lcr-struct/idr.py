@@ -19,8 +19,6 @@ import json
 import os
 
 import resources
-import coil
-
 from localcider.sequenceParameters import SequenceParameters
 
 pd.options.display.max_columns = 30
