@@ -18,11 +18,11 @@ import re
 AA_CODE_LIST = ['?','A','R','N','D','C','Q','E','G','H','I','L','K','M','F','P','S','T','W','Y','V','U','O','B','Z','X']
 AA_CODE_DICT = {'A':1,'C':2,'D':3,'E':4,'F':5,'G':6,'H':7,'I':8,'K':9,'L':10,'M':11,'N':12,'P':13,'Q':14,'R':15,'S':16,'T':17,'V':18,'W':19,'Y': 20,'U':21,'O':22,'B':23,'Z':24,'X':25}
 AA_CODE_ABRV = ['?', 'Ala', 'Arg', 'Asn', 'Asp', 'Cys', 'Gln', 'Glu', 'Gly', 'His', 'Ile', 'Leu', 'Lys', 'Met', 'Phe', 'Pro', 'Ser', 'Thr', 'Trp', 'Try', 'Val', 'Sec', 'Pyl', 'Asx', 'Glx', 'Xaa']
-AA_GROUPS = [[19,8,16,17,5,3,6,22], [14,18,1,15,20,11,10,13,21], [12,2,9], [4,7]]
+AA_GROUPS = [[19,8,16,17,5,3,6,22,23], [14,18,1,15,20,11,10,13,21], [12,2,9], [4,7,24]]
 AA_GROUPS_NAMES = ['Polar Uncharged', 'Non-Polar', 'Polar Basic', 'Polar Acidic']
 
 # I decided to create this simplified polarity groups to use for poly and some other analysis
-AA_GROUPS2 = [[19,8,16,17,5,3,6,22,12,2,9,4,7], [14,18,1,15,20,11,10,13,21]]
+AA_GROUPS2 = [[19,8,16,17,5,3,6,22,12,2,9,4,7,23,24], [14,18,1,15,20,11,10,13,21]]
 AA_GROUPS2_NAMES = ['Polar', 'Non-Polar']
 
 def check_uniprot_name(name):

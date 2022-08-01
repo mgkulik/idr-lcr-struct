@@ -72,10 +72,12 @@ def extract_polyXY_features(polyXY_path, fasta_data, tp=2):
             poly_parts = rowsplit[3]
             poly_part = rowsplit[3].split("/")
             poly_part1 = poly_part[0]
-            poly_part1_tp = resources.get_aa_type(poly_part1)
+            if (poly_part1!="X"):
+                poly_part1_tp = resources.get_aa_type(poly_part1)
             if (tp==2):
                 poly_part2 = poly_part[1]
-                poly_part2_tp = resources.get_aa_type(poly_part2)
+                if (poly_part2!="X"):
+                    poly_part2_tp = resources.get_aa_type(poly_part2)
                 if (poly_part1_tp==poly_part2_tp):
                     poly_pair_tp = poly_part1_tp
                 else:
@@ -87,11 +89,12 @@ def extract_polyXY_features(polyXY_path, fasta_data, tp=2):
                 poly_pair_tp=poly_part1_tp
                 poly_aa = rowsplit[6]
             poly_size = len(poly_aa)
-            idr_group_tots, idr_group_props = resources.get_AAcomposition(poly_aa, 2)
-            poly_lst.append([uniprot_id, poly_name, poly_num, poly_start, poly_end, 
-                             poly_rel_start, poly_rel_end, poly_parts, poly_part1, 
-                             poly_part2, poly_part1_tp, poly_part2_tp, poly_pair_tp, poly_aa, 
-                             poly_size, seq_len, seq_desc, seq_aa]+idr_group_tots+idr_group_props)
+            if (poly_part1!="X") and (poly_part2!="X"):
+                idr_group_tots, idr_group_props = resources.get_AAcomposition(poly_aa, 2)
+                poly_lst.append([uniprot_id, poly_name, poly_num, poly_start, poly_end, 
+                                 poly_rel_start, poly_rel_end, poly_parts, poly_part1, 
+                                 poly_part2, poly_part1_tp, poly_part2_tp, poly_pair_tp, poly_aa, 
+                                 poly_size, seq_len, seq_desc, seq_aa]+idr_group_tots+idr_group_props)
             old_id = uniprot_id
     return poly_lst
 
@@ -260,7 +263,7 @@ def final_2Ddata(df_poly_details, df_2D_details):
 
 
 ### MAIN POLY SESSION
-def main_poly(seqs_path, polyXY_path, idrcsv_path, source, cutoff, min_size):
+def main_poly(seqs_path, polyXY_path, idrcsv_path, source, n_aa, cutoff, min_size):
     ''' Collecting poly info and their relation to IDRs. '''
     fasta_data,_,_ = resources.read_fasta(seqs_path)
     poly_lst = extract_polyXY_features(polyXY_path, fasta_data, n_aa)

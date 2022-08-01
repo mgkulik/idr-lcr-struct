@@ -39,12 +39,11 @@ if not "comp_path" in locals_var:
 
 print("Please define what step of the process you wish to execute:")
 print("0: Generate masked PDB sequnces and 2D; \
-      \n1: Execute all steps; \
-      \n2: Extract IDRs from MOBIDB; \
-      \n3: Generate IDR additional data; \
-      \n4: Generate PolyX/Ys additional data; \
-      \n5: Cross IDRs with PDB sequences; \
-      \n6: Cross Polys with PDB sequences.")
+      \n1: Extract IDRs from MOBIDB; \
+      \n2: Generate IDR additional data; \
+      \n3: Generate PolyX/Ys additional data; \
+      \n4: Cross IDRs with PDB sequences; \
+      \n5: Cross Polys with PDB sequences.")
 num_sel = input("Select a number according with description above ({0}-{1}): ".format(str(seq[0]), str(seq[1])))
 assert(num_sel.isnumeric()), "Enter a number between {0} and {21}!".format(str(seq[0]), str(seq[1]))
 assert(int(num_sel)>=seq[0] and int(num_sel)<=seq[1]), "Enter a number between {0} and {1}!".format(str(seq[0]), str(seq[1]))
@@ -83,7 +82,7 @@ if int(num_sel)==0:
         pdb_det_path = resources.get_pdbOut_names(pdb_files, '_pdb_details.csv.csv', message)
 
 
-if (int(num_sel)==1 or int(num_sel)==2):
+if int(num_sel)==1:
     """ Here your output will be a tab separated file with IDR regions and the 
     MobiDB-lite consensus score for the complete sequence. """
     
@@ -95,7 +94,7 @@ if (int(num_sel)==1 or int(num_sel)==2):
     tab_idr = idr.extract_json(path1)
     print("\nTab file {0} with MobiDB predictions was saved to disk.".format(os.path.basename(tab_idr)))
 
-if (int(num_sel)==1 or int(num_sel)==3):
+if (int(num_sel)==1 or int(num_sel)==2):
     """ Here your output will be a csv file with several extractions and 
     calculations of IDR properties and a reduced fasta containing only the
     sequences with predicted IDRs. """
@@ -123,7 +122,7 @@ if (int(num_sel)==1 or int(num_sel)==3):
     #    idr_details = os.path.join(comp_path_un, un_prot+"_mobidb_idr_details.csv")
 
 
-if (int(num_sel)==1 or int(num_sel)==4):
+if int(num_sel)==3:
     """ Here your output will be a csv file with several extractions and 
     calculations of PolyX or PolyXY properties. """
     
@@ -143,7 +142,7 @@ if (int(num_sel)==1 or int(num_sel)==4):
     n_aa = input("Number of different residues per repeat (e.g. 1=homorepeat, 2=direpeat ...): ")
     assert(n_aa.isnumeric()), "Value must be bigger than 0!"
     assert(int(n_aa)>0), "Value must be bigger than 0!"
-    if n_aa==1:
+    if int(n_aa)==1:
         source="polyx"
     else:
         source="polyxy"
@@ -159,11 +158,11 @@ if (int(num_sel)==1 or int(num_sel)==4):
         assert(min_size.isnumeric()), "Value must be higher than 4!"
         assert(int(min_size)>4), "Value must be higher than 4!"
     
-    poly_details_path = poly.main_poly(path_fasta, tab_poly, idr_details, source, float(cutoff), int(min_size))
+    poly_details_path = poly.main_poly(path_fasta, tab_poly, idr_details, source, int(n_aa), float(cutoff), int(min_size))
     print("IDR details ({0}) were saved to disk.".format(os.path.basename(poly_details_path)))
 
     
-if (int(num_sel)==1 or int(num_sel)==5):
+if (int(num_sel)>=3 or int(num_sel)==4):
     """ Several outputs that save the crossing data do disc to save memory (using pickle files) .
     
     Main output will a csv file with all IDRs, with or without overlaps with PDB
@@ -234,7 +233,7 @@ if (int(num_sel)==1 or int(num_sel)==5):
     # Now get all the CIF files that are missing and extract the auth to calculate the real PDB coordinates
     idrPdb.main_pos_files(idr_all_path, pdb_files, path_pdb_files)
     
-if (int(num_sel)==1 or int(num_sel)==6):
+if (int(num_sel)>=3 or int(num_sel)==5):
     ''' We finally got to the last main step to cross polyX/XYs with IDRs and PDBs.
     The output is a polyX/XY detailed file with extra PDB info and IDR/PDB info. '''
     
