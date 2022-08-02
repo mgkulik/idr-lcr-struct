@@ -23,13 +23,15 @@ from localcider.sequenceParameters import SequenceParameters
 
 pd.options.display.max_columns = 30
 
-def get_entry_info(vals):
+def get_entry_info(vals, name):
     ''' Returns basic info from mobidb predictions dictionary. '''
+    pred_score = ""
     regions = vals['regions']
-    pred_score = vals['scores']
+    if name=="mobidb":
+        pred_score = vals['scores']
     return regions, pred_score
 
-def extract_json(filename):
+def extract_json(filename, key, name):
     ''' Reads the json proteome downloaded from mobidb, extract IDR predictions
     based on the consensus data and save a simple tab separated file to disk. '''
     
@@ -42,13 +44,14 @@ def extract_json(filename):
     # The organism file presents only the consensus data ...
     dt_mobi = list()
     for a in range(len(json_data)):
-        if ("prediction-disorder-mobidb_lite" in json_data[a]):
+        if (key in json_data[a]):
             seq_acc = json_data[a]['acc']
             seq_vals = json_data[a]['sequence']
-            mobidb_vals = json_data[a]['prediction-disorder-mobidb_lite']
+            mobidb_vals = json_data[a][key]
             mobi_lst = ""
-            reg_data, scores = get_entry_info(mobidb_vals)
-            scores = ','.join([str(i) for i in scores])
+            reg_data, scores = get_entry_info(mobidb_vals, name)
+            if name=="mobidb":
+                scores = ','.join([str(i) for i in scores])
             mobi_lst = seq_acc+sep+scores 
             for k in range(len(reg_data)):
                 mobi_lst += sep+str(reg_data[k][0])+"-"+str(reg_data[k][1])

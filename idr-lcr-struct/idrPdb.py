@@ -50,7 +50,6 @@ def extract_blast_pairs(xml_path, pickle_sz, sep1, sep2):
             'Hsp_identity', 'Hsp_gaps', 'Hsp_qseq', 'Hsp_hseq', 'Hsp_midline']
     
     i=0
-    mode =""
     dt_pdb = dict()
     start_time = time.time()
     for event, elem in ET.iterparse(xml_path, events=('end',)):
@@ -85,19 +84,15 @@ def extract_blast_pairs(xml_path, pickle_sz, sep1, sep2):
                             dt_pdb[i] = query_vals+hits_vals+hsps_vals
                             if i % pickle_sz == 0:
                                 print(i)
-                                if (i==pickle_sz):
-                                    mode = 'wb'
-                                else:
-                                    mode = 'ab'
+                                mode = 'ab'
                                 resources.save_pickle(dt_pdb, pdb_filename, mode)
                                 dt_pdb = dict()
                         hsps.clear()
                 hit_child.clear()
             elem.clear()
     print(i)
-    if (mode==""):
-        mode = 'wb'
-    resources.save_pickle(dt_pdb, pdb_filename, 'wb')
+    mode = 'ab'
+    resources.save_pickle(dt_pdb, pdb_filename, mode)
     
     tot_in_sec = time.time() - start_time
     print("--- %s seconds ---" % (tot_in_sec))
@@ -132,7 +127,6 @@ def positions2array(df_idr, pdb_path, ids_pos=(0,8,9), cols_df = ['idr_start', '
     starts_ends, idx_million = [], []
     len_startsends, i = 0, 0
     IDR_old=''
-    mode=''
     start_time = time.time()
     with open(pdb_path, 'rb') as handle:
         while 1:
@@ -151,10 +145,7 @@ def positions2array(df_idr, pdb_path, ids_pos=(0,8,9), cols_df = ['idr_start', '
                         starts_ends = np.concatenate(starts_ends, axis=0)
                         len_startsends += len(starts_ends)
                         idx_million.append(len_startsends)
-                        if (pickle_sz==i):
-                            mode = 'wb'
-                        else:
-                            mode = 'ab'
+                        mode = 'ab'
                         resources.save_pickle(starts_ends, f_name, mode)
                         starts_ends = []
                     IDR_old = val[ids_pos[0]]
@@ -167,8 +158,7 @@ def positions2array(df_idr, pdb_path, ids_pos=(0,8,9), cols_df = ['idr_start', '
     starts_ends = np.concatenate(starts_ends, axis=0)
     len_startsends += len(starts_ends)
     idx_million.append(len_startsends)
-    if (mode==""):
-        mode="wb"
+    mode="ab"
     resources.save_pickle(starts_ends, f_name, mode)
     tot_in_sec = time.time() - start_time
     print("--- %s seconds ---" % (tot_in_sec))
@@ -185,7 +175,6 @@ def get_another_data(df_idr, pdb_path, idx_million, ids_pos=(0,1,2,5,6,4,10,11,1
     assert ((sum(dt)==2 and len(file_names)==5) or (sum(dt)==1 and len(file_names)>=4)), "Please provide the file names to be used in the pickles."
     
     sz = idx_million[0]
-    mode=""
     if dt[0]:
         evalues = np.empty(sz, dtype=float)
         idr_sizes = np.empty(sz, dtype=int)
@@ -234,10 +223,7 @@ def get_another_data(df_idr, pdb_path, idx_million, ids_pos=(0,1,2,5,6,4,10,11,1
                         if ((i>0)&(i%pickle_sz==0)):
                             #if (i==(pickle_sz*2)):
                             #    break
-                            if (pickle_sz==i):
-                                mode = 'wb'
-                            else:
-                                mode = 'ab'
+                            mode = 'ab'
                             resources.save_pickle(evalues, resources.gen_filename(pdb_path, file_names[0], "", "pickle"), mode)
                             resources.save_pickle(idr_sizes, resources.gen_filename(pdb_path, file_names[1], "", "pickle"), mode)
                             resources.save_pickle(un_ids, resources.gen_filename(pdb_path, file_names[2], "", "pickle"), mode)
@@ -271,8 +257,6 @@ def get_another_data(df_idr, pdb_path, idx_million, ids_pos=(0,1,2,5,6,4,10,11,1
             except EOFError:
                 break
     print(i)
-    if (mode==""):
-        mode="wb"
     if dt[0]:
         resources.save_pickle(evalues, resources.gen_filename(pdb_path, file_names[0], "", "pickle"), mode)
         resources.save_pickle(idr_sizes, resources.gen_filename(pdb_path, file_names[1], "", "pickle"), mode)
@@ -1507,11 +1491,31 @@ def correct_pdb_coords(pdb_coords, df_idr_details, idr_all_path, prefix="idr"):
     return df_idr_details
 
 
+def clean_pickles(basis_path, file_names):
+    ''' Delete previous pickle files to make sure no append is made wrongly. '''
+    
+    all_files = [f.path for f in os.scandir(resources.get_dir(basis_path)) if os.path.isfile(f)]
+    if len(file_names)==5:
+        temp_files = file_names.copy()
+        temp_files.insert(0, 'starts_ends')
+    for name in temp_files:
+        comp_name = basis_path+name+".pickle"
+        if comp_name in all_files:
+            os.remove(comp_name)
+            
+    # Main pickle
+    comp_name = basis_path+"blast.pickle"
+    if comp_name in all_files:
+        os.remove(comp_name)
+
+
 def main_merge_idrPdb(idrs_path, pdb_path, file_names, pdb_det_path, cutoff):
     ''' Parts 1 and 2 - Main function IDR-PDB, filtering just synthetic strucures. '''
     # This process can take several minutes to run.
     
     basis_path = resources.get_dir(pdb_path)+"/"+resources.get_filename(pdb_path)+"_"
+    
+    clean_pickles(basis_path, file_names)
     
     # Not sure if the separators can be adjusted in the blast file
     sep1 = "|"
