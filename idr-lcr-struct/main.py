@@ -18,7 +18,9 @@ import idrPdb
 import pdbDssp
 import resources
 
-seq = [0,6]
+import time
+
+seq = [0,3]
 file_names=['evalues_idrs', 'idr_sizes', 'unique_ids', 'gen_info', 'blast_over']
 locals_var =  locals()
 
@@ -39,11 +41,9 @@ if not "comp_path" in locals_var:
 
 print("Please define what step of the process you wish to execute:")
 print("0: Generate masked PDB sequnces and 2D; \
-      \n1: Extract IDRs from MOBIDB; \
-      \n2: Generate IDR additional data; \
-      \n3: Generate PolyX/Ys additional data; \
-      \n4: Cross IDRs with PDB sequences; \
-      \n5: Cross Polys with PDB sequences.")
+      \n1: EXECUTE PART 1: All extractions needed to the blastP be executed; \
+      \n2: EXECUTE PART 2: All the remaining steps. The blast output is required; \
+      \n3: Re-execute just the poly step (in case you want to generate files for different numbers of amino acids).")
 num_sel = input("Select a number according with description above ({0}-{1}): ".format(str(seq[0]), str(seq[1])))
 assert(num_sel.isnumeric()), "Enter a number between {0} and {21}!".format(str(seq[0]), str(seq[1]))
 assert(int(num_sel)>=seq[0] and int(num_sel)<=seq[1]), "Enter a number between {0} and {1}!".format(str(seq[0]), str(seq[1]))
@@ -103,8 +103,6 @@ if int(num_sel)==1:
         key = "prediction-disorder-th_50"
         name = "consensus"
     
-
-if (int(num_sel)==1 or int(num_sel)==2):
     """ Here your output will be a csv file with several extractions and 
     calculations of IDR properties and a reduced fasta containing only the
     sequences with predicted IDRs. """
@@ -123,44 +121,7 @@ if (int(num_sel)==1 or int(num_sel)==2):
                 tab_idr = os.path.join(comp_path_un, un_prot+"_mobidb_idr.tab")
         
 
-if (int(num_sel)==3 or int(num_sel)==5):
-    """ Here your output will be a csv file with several extractions and 
-    calculations of PolyX or PolyXY properties. """
-    
-    cutoff=.6
-    min_size=4
-    
-    if not "tab_poly" in locals_var:
-        tab_poly = input("Provide the path for the Poly tab file. \nIt must be available in the directory provided before and start with the Uniprot proteome ID:  ")   
-        tab_poly = resources.valid_file(tab_poly, comp_path_un)
-    if not "path_fasta" in locals_var:
-        path_fasta = input("Provide the path for the proteome fasta. \nIt must be available in the directory provided before and start with the Uniprot proteome ID: ")
-        path_fasta = resources.valid_file(path_fasta, comp_path_un)
-        
-    if not "idr_details" in locals_var:
-        idr_details = os.path.join(comp_path_un, un_prot+"_mobidb_idr_details.csv")
-    
-    n_aa = input("Number of different residues per repeat (e.g. 1=homorepeat, 2=direpeat ...): ")
-    assert(n_aa.isnumeric()), "Value must be bigger than 0!"
-    assert(int(n_aa)>0), "Value must be bigger than 0!"
-    if int(n_aa)==1:
-        source="polyx"
-    else:
-        source="polyxy"
-    
-    change_cut = input("The cut off values for poly inside IDR are: 0.60 or 4 residues.\nDo you want to change it (0:No, 1:Yes)? ")
-    assert(change_cut.isnumeric()), "Value must be 0 or 1!"
-    assert(int(change_cut)==0 or int(change_cut)==1), "Value must be 0 or 1!"
-    
-    if (int(change_cut)==1):
-        cutoff = input("Define new accepted fraction (e.g. 0.60): ")
-        assert(float(cutoff)>=0.5 and float(cutoff)<=1.0), "Value must be between 0 and 1!"
-        min_size = input("Define new accepted minimum of residues (e.g. 4): ")
-        assert(min_size.isnumeric()), "Value must be higher than 4!"
-        assert(int(min_size)>4), "Value must be higher than 4!"
-
-    
-if (int(num_sel)==3 or int(num_sel)==4):
+if (int(num_sel)==2 or int(num_sel)==3):
     """ Several outputs that save the crossing data do disc to save memory (using pickle files) .
     
     Main output will a csv file with all IDRs, with or without overlaps with PDB
@@ -215,23 +176,31 @@ if (int(num_sel)==3 or int(num_sel)==4):
     if not "path_pdb_files" in locals_var:
         path_pdb_files = input("Please inform the complete path where the PDB/CIF files will be stored: ")
         assert(os.path.exists(path_pdb_files)), "Please provide an existing directory with the proper permissions to save and delete files."
-    
-    
-if (int(num_sel)>=3 or int(num_sel)==5):
-    ''' We finally got to the last main step to cross polyX/XYs with IDRs and PDBs.
-    The output is a polyX/XY detailed file with extra PDB info and IDR/PDB info. '''
-    
+        
+    """ Here your output will be a csv file with several extractions and 
+    calculations of PolyX or PolyXY properties. """
+        
     cutoff=.6
     min_size=4
+    
+    if not "tab_poly" in locals_var:
+        tab_poly = input("Provide the path for the Poly tab file. \nIt must be available in the directory provided before and start with the Uniprot proteome ID:  ")   
+        tab_poly = resources.valid_file(tab_poly, comp_path_un)
+    if not "path_fasta" in locals_var:
+        path_fasta = input("Provide the path for the proteome fasta. \nIt must be available in the directory provided before and start with the Uniprot proteome ID: ")
+        path_fasta = resources.valid_file(path_fasta, comp_path_un)
+        
+    if not "idr_details" in locals_var:
+        idr_details = os.path.join(comp_path_un, un_prot+"_mobidb_idr_details.csv")
     
     n_aa = input("Number of different residues per repeat (e.g. 1=homorepeat, 2=direpeat ...): ")
     assert(n_aa.isnumeric()), "Value must be bigger than 0!"
     assert(int(n_aa)>0), "Value must be bigger than 0!"
-    if n_aa==1:
+    if int(n_aa)==1:
         source="polyx"
     else:
         source="polyxy"
-        
+    
     change_cut = input("The cut off values for poly inside IDR are: 0.60 or 4 residues.\nDo you want to change it (0:No, 1:Yes)? ")
     assert(change_cut.isnumeric()), "Value must be 0 or 1!"
     assert(int(change_cut)==0 or int(change_cut)==1), "Value must be 0 or 1!"
@@ -242,6 +211,10 @@ if (int(num_sel)>=3 or int(num_sel)==5):
         min_size = input("Define new accepted minimum of residues (e.g. 4): ")
         assert(min_size.isnumeric()), "Value must be higher than 4!"
         assert(int(min_size)>4), "Value must be higher than 4!"
+    
+
+    ''' We finally got to the last main step to cross polyX/XYs with IDRs and PDBs.
+    The output is a polyX/XY detailed file with extra PDB info and IDR/PDB info. '''
     
     out_files = sorted([f.path for f in os.scandir(comp_path_un) if os.path.isfile(f)])
     poly_all_path = resources.get_pdbOut_names(out_files, 'data_all_'+source+'.csv', "")
@@ -267,43 +240,53 @@ if (int(num_sel)>=3 or int(num_sel)==5):
         if not "path_coords" in locals_var:
             message = "No PDB coordinates file located in the main folder.\nYou can't execute this step before step 5."
             path_coords = resources.get_pdbOut_names(out_files, '_coords_pdb.csv', message)
-            
+
 
 # Now running all
 if int(num_sel)==1:
+
+    start_time = time.time()
     
     tab_idr = idr.extract_json(path1, key, name)
     print("\nTab file {0} with MobiDB predictions was saved to disk.".format(os.path.basename(tab_idr)))
-    
-    
-if (int(num_sel)==1 or int(num_sel)==2):
-    
+       
     if idr_details=="":
         idr_details, idr_fasta_path = idr.run_all(path_fasta, tab_idr)
         print("\nFiltered fasta ({0}) and IDR details ({1}) were saved to disk.".format(os.path.basename(idr_fasta_path), os.path.basename(idr_details)))
     
-    # Run in case not ran before, this step takes long
+    print("\nThe files you need for BlastP are ready! Generate your blast XML file and come back.\nWe'll optimize our time by running another step now...\n\n\nDON'T FORGET THE BLASTP.")
+    
     _ = idr.get_cider_props(idr_details, "idr")
     
-
-if (int(num_sel)==3 or int(num_sel)==5):
+    end_time = time.time()
+    time_formated = resources.transform_time(start_time, end_time)
+    print("\nPART 1 FINISHED. Time: {0}".format(time_formated))
     
-    poly_details_path = poly.main_poly(path_fasta, tab_poly, idr_details, source, int(n_aa), float(cutoff), int(min_size))
-    print("IDR details ({0}) were saved to disk.".format(os.path.basename(poly_details_path)))
 
-
-if (int(num_sel)==3 or int(num_sel)==4):
+if int(num_sel)==2:
     
+    start_time = time.time()
+
     idrs_path = idrPdb.main_merge_idrPdb(idr_details, blast_path, file_names, pdb_det_path, (cutoff_idr, min_size_idr))
     # Extract the information about PDBs over IDRs and select the best candidates based on the filtering criteria.
     idr_all_path = idrPdb.main_ss_annotation(idrs_path, pdb_mask_path, ss_file_path, dssp_path, idr_fasta_path, file_names, (cutoff_idr, min_size_idr), save_dup=True)
     # Now get all the CIF files that are missing and extract the auth to calculate the real PDB coordinates
     idrPdb.main_pos_files(idr_all_path, pdb_files, path_pdb_files)
-    
 
-if (int(num_sel)>=3 or int(num_sel)==5):
+
+if (int(num_sel)==2 or int(num_sel)==3):
+    
+    if int(num_sel)==3:
+        start_time = time.time()
+    
+    poly_details_path = poly.main_poly(path_fasta, tab_poly, idr_details, source, int(n_aa), float(cutoff), int(min_size))
+    print("IDR details ({0}) were saved to disk.".format(os.path.basename(poly_details_path)))
     
     if poly_all_path=="":
         poly_all_path, polyss_path = poly.main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, file_names, path_coords, source, float(cutoff), int(min_size))
-        print("ALL STEPS FINISHED.")
         print("Poly details ({0}) and Poly 2D data were saved to disk.\n\nENJOY!!!".format(os.path.basename(poly_all_path), os.path.basename(polyss_path)))
+    
+    end_time = time.time()
+    time_formated = resources.transform_time(start_time, end_time)
+    print("\nALL PARTS FINISHED. Time: {0}".format(time_formated))
+    

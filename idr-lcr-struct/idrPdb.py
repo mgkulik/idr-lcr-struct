@@ -18,6 +18,7 @@ import time
 import os
 import re
 import math
+import gc
 
 import resources
 import pdbDssp
@@ -1464,7 +1465,7 @@ def correct_pdb_coords(pdb_coords, df_idr_details, idr_all_path, prefix="idr"):
     # Extracting only the columns of interest from both files
     cols = ["pdb_name", "dbrefs_start", "dbrefs_auth_start", "pdb_ref_db"]
     pdb_coords_sel = pdb_coords.loc[:, cols]
-    pdb_coords_sel = pdb_coords_sel.astype({"dbrefs_start":"int32", "dbrefs_auth_start":"int32"})
+    pdb_coords_sel = pdb_coords_sel.astype({"dbrefs_start":"float32", "dbrefs_auth_start":"float32"})
     pdb_coords_sel["dbrefs_real_start"] = pdb_coords_sel["dbrefs_auth_start"]-pdb_coords_sel["dbrefs_start"]
         
     cols = [prefix+"_name", "pdb_name", prefix+"_pdb_rel_start", "over_ss_real_sz"]
@@ -1526,6 +1527,8 @@ def main_merge_idrPdb(idrs_path, pdb_path, file_names, pdb_det_path, cutoff):
     print("\nMaking the XML file provided by blastP easier to my use...")    
     # Starting with the extraction of each blast pair from the xml file
     blast_pickle = extract_blast_pairs(pdb_path, pickle_sz, sep1, sep2)
+    gc.collect()
+    
     df_idr = pd.read_csv(idrs_path)
     
     # Replicating the PDBs and IDRs to extract Positions, E-value and unique IDSs an all other relevant alignment data
@@ -1540,6 +1543,7 @@ def main_merge_idrPdb(idrs_path, pdb_path, file_names, pdb_det_path, cutoff):
     if len(file_names)==5:
         file_names.insert(0, 'starts_ends')
     
+    print("\nNow we keep only the PDBs that actually overlap with IDRs.")
     # We started running for less significant e-values too, but data proved not relevant
     # So we dropped the other e-values: 0.01 (maybe significant) and 10 (not significant).
     # Check the function to know details about the other outputs. They were created for validation purposes
@@ -1552,6 +1556,7 @@ def main_merge_idrPdb(idrs_path, pdb_path, file_names, pdb_det_path, cutoff):
     # to reduce the number of alignments and improve performance.
     eval_file = 'EVAL_data_noSeqs_idr.csv'
     df_idr_new = mark_no_homologs(basis_path, df_idr_new, eval_file)
+    gc.collect() 
     return basis_path+eval_file
     
 
@@ -1606,6 +1611,8 @@ def main_pos_files(idr_all_path, pdb_files, path_pdb_files):
         file_name = basis_path +"sitll_missing_cif_list.txt"
         resources.save_sep_file(missing, file_name)
         print("ATENTION: There are still some CIF files we were not able to download.\nCheck the file sitll_missing_cif_list.txt and try to download them manually.\nWe will move on now considering the files available on disk!")
+    
+    gc.collect() # The memory is exploding here
     df_pdb_coords, df_chain = pdbDssp.extract_from_cif_all(path_pdb_files, cif_ids)
     path_coords = basis_path+"coords_pdb.csv"
     path_chains = basis_path+"chains_pdb.csv"
