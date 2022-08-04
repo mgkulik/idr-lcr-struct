@@ -47,18 +47,21 @@ def extract_json(filename, key, name):
         if (key in json_data[a]):
             seq_acc = json_data[a]['acc']
             seq_vals = json_data[a]['sequence']
+            uniref100 = json_data[a]['uniref100']
+            uniref90 = json_data[a]['uniref90']
+            uniref50 = json_data[a]['uniref50']
             mobidb_vals = json_data[a][key]
             mobi_lst = ""
             reg_data, scores = get_entry_info(mobidb_vals, name)
             if name=="mobidb":
                 scores = ','.join([str(i) for i in scores])
-            mobi_lst = seq_acc+sep+scores 
+            mobi_lst = seq_acc+sep+uniref100+sep+uniref90+sep+uniref50+sep+scores 
             for k in range(len(reg_data)):
                 mobi_lst += sep+str(reg_data[k][0])+"-"+str(reg_data[k][1])
             dt_mobi.append(mobi_lst+"\n")
     
     new_name = resources.gen_filename(filename, "mobidb", "idr", "tab")
-    resources.save_file(dt_mobi, new_name)
+    resources.save_file(dt_mobi, new_name, "w")
     return (new_name)
     
 
@@ -92,10 +95,13 @@ def get_idr_data(seq_idrs, seq, seq_len, inter_size=50, perc_size=.7):
     error_seq = list()
     crit_size = inter_size*perc_size
     seq_name = seq_idrs[0]
+    uniref100 = seq_idrs[1]
+    uniref90 = seq_idrs[2]
+    uniref50 = seq_idrs[3]
     idr_scores = ""
     i=1
-    scores=[]
-    for idr in seq_idrs[2:]:
+    scores = seq_idrs[4]
+    for idr in seq_idrs[5:]:
         idrs = idr.split("-")
         idr_name = seq_name+'_'+str(i)
         idr_num = i
@@ -109,7 +115,7 @@ def get_idr_data(seq_idrs, seq, seq_len, inter_size=50, perc_size=.7):
         if (idr_end<=seq_len):
             idr_aa = seq[idr_start-1:idr_end]
             if len(scores)>1:
-                idr_scores = scores[idr_start-1:idr_end]
+                idr_scores = scores.split(",")[idr_start-1:idr_end]
                 num_scores = [float(s) for s in idr_scores]
                 idr_mean_score = stats.mean(num_scores)
                 idr_median_score = stats.median(num_scores)
@@ -120,7 +126,10 @@ def get_idr_data(seq_idrs, seq, seq_len, inter_size=50, perc_size=.7):
             idr_group_tots, idr_group_props, idr_cats = resources.get_idr_AAcomposition(idr_aa)
             #if (idr_size>=crit_size and (seq_len-idr_end)<=(inter_size-crit_size)):
             #    idr_last50=1
-            lst_idrs = [seq_name, seq_len, idr_name, idr_num, idr_aa, idr_start, idr_rel_start, idr_end, idr_rel_end, idr_size, idr_rel_size, idr_bin, idr_bin_lbl, idr_scores, idr_mean_score, idr_median_score] + idr_group_tots + idr_group_props + idr_cats
+            lst_idrs = [seq_name, seq_len, idr_name, idr_num, idr_aa, idr_start, 
+                        idr_rel_start, idr_end, idr_rel_end, idr_size, idr_rel_size, 
+                        idr_bin, idr_bin_lbl, uniref100, uniref90, uniref50, 
+                        idr_scores, idr_mean_score, idr_median_score] + idr_group_tots + idr_group_props + idr_cats
             all_idrs.append(lst_idrs)
             i+=1
         else:
@@ -128,12 +137,12 @@ def get_idr_data(seq_idrs, seq, seq_len, inter_size=50, perc_size=.7):
     return all_idrs, error_seq
 
           
-def extract_idrs(tab_path, fasta_data, error_path=''):
+def extract_idrs(tabidr_path, fasta_data, error_path=''):
     ''' Opens and get the IDR data and fasta data of the sequences of interest.
     Manages all I/O validations and save errors to disk. '''
     seq_lst, idrs_info, error_lst = [], [], []
     seq_idr_lens = 0
-    with open(tab_path, 'r') as handle:
+    with open(tabidr_path, 'r') as handle:
         i=0
         for line in enumerate(handle):
             rowsplit = line[1].rstrip("\n").split("\t")
@@ -283,11 +292,11 @@ def run_all(fastaname, tabidr_path, use_toolscores=False):
     
     colnames = ['seq_name', 'seq_len', 'idr_name', 'idr_num', 'idr_aa', 'idr_start', 
                 'idr_rel_start', 'idr_end', 'idr_rel_end', 'idr_size', 'idr_rel_size', 
-                'idr_bin', 'idr_bin_lbl', 'idr_scores', 'idr_mean_score', 
-                'idr_median_score', 'tot_polar', 'tot_non_polar', 'tot_basic', 
-                'tot_acidic', 'prop_polar', 'prop_non_polar', 'prop_basic', 
-                'prop_acidic', 'idr_1st_cat', 'idr_2nd_cat', 'idr_tops_diff', 
-                'idr_tops_diff_prop', 'idr_gp_variance']
+                'idr_bin', 'idr_bin_lbl', 'uniref100', 'uniref90', 'uniref50',
+                'idr_scores', 'idr_mean_score', 'idr_median_score', 'tot_polar', 
+                'tot_non_polar', 'tot_basic', 'tot_acidic', 'prop_polar', 
+                'prop_non_polar', 'prop_basic', 'prop_acidic', 'idr_1st_cat', 
+                'idr_2nd_cat', 'idr_tops_diff', 'idr_tops_diff_prop', 'idr_gp_variance']
     idrs_path = resources.gen_filename(tabidr_path, "mobidb", "idr_details", "csv")
     pd_idrs = generate_df_idrs(colnames, idrs_info, idrs_path, idr_min_sz)
         

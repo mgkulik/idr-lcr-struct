@@ -109,16 +109,15 @@ if int(num_sel)==1:
     
     if not "idr_details" in locals_var:
         
-        out_files = sorted([f.path for f in os.scandir(comp_path_un) if os.path.isfile(f)])
-        idr_details = resources.get_pdbOut_names(out_files, un_prot+'_mobidb_idr_details.csv', "")
+        #out_files = sorted([f.path for f in os.scandir(comp_path_un) if os.path.isfile(f)])
+        #idr_details = resources.get_pdbOut_names(out_files, un_prot+'_mobidb_idr_details.csv', "")
         # Run in case not ran before
-        if idr_details=="":
-        
-            if not "path_fasta" in locals_var:
-                path_fasta = input("Provide the path for the proteome fasta. \nIt must be available in the directory provided before and start with the Uniprot proteome ID: ")
-                path_fasta = resources.valid_file(path_fasta, comp_path_un)
-            if not "tab_idr" in locals_var:
-                tab_idr = os.path.join(comp_path_un, un_prot+"_mobidb_idr.tab")
+        #if idr_details=="":
+        if not "path_fasta" in locals_var:
+            path_fasta = input("Provide the path for the proteome fasta. \nIt must be available in the directory provided before and start with the Uniprot proteome ID: ")
+            path_fasta = resources.valid_file(path_fasta, comp_path_un)
+        if not "tab_idr" in locals_var:
+            tab_idr = os.path.join(comp_path_un, un_prot+"_mobidb_idr.tab")
         
 
 if (int(num_sel)==2 or int(num_sel)==3):
@@ -158,25 +157,26 @@ if (int(num_sel)==2 or int(num_sel)==3):
     if not "idr_details" in locals_var:
         idr_details = os.path.join(comp_path_un, un_prot+"_mobidb_idr_details.csv")
     
-    if not "blast_path" in locals_var:
-        blast_path = input("Provide the path for the blast XML file. \nIt must be available in the directory provided before and start with the Uniprot proteome ID: ")   
-        blast_path = resources.valid_file(blast_path, comp_path_un)
+    if int(num_sel)!=3:
+        if not "blast_path" in locals_var:
+            blast_path = input("Provide the path for the blast XML file. \nIt must be available in the directory provided before and start with the Uniprot proteome ID: ")   
+            blast_path = resources.valid_file(blast_path, comp_path_un)
     
-    change_cut = input("The cut off values for IDRs overlapping PDB sequences are: 0.50 or 10 residues.\nDo you want to change it (0:No, 1:Yes)? ")
-    assert(change_cut.isnumeric()), "Value must be 0 or 1!"
-    assert(int(change_cut)==0 or int(change_cut)==1), "Value must be 0 or 1!"
-    
-    if (int(change_cut)==1):
-        cutoff_idr = input("Define new accepted fraction (e.g. 0.50): ")
-        assert(float(cutoff_idr)>=0.5 and float(cutoff_idr)<=1.0), "Value must be between 0 and 1!"
-        min_size_idr = input("Define new accepted minimum of residues (e.g. 10): ")
-        assert(min_size_idr.isnumeric()), "Value must be higher than 10!"
-        assert(int(min_size_idr)>10), "Value must be higher than 10!"
-            
-    if not "path_pdb_files" in locals_var:
-        path_pdb_files = input("Please inform the complete path where the PDB/CIF files will be stored: ")
-        assert(os.path.exists(path_pdb_files)), "Please provide an existing directory with the proper permissions to save and delete files."
+        change_cut = input("The cut off values for IDRs overlapping PDB sequences are: 0.50 or 10 residues.\nDo you want to change it (0:No, 1:Yes)? ")
+        assert(change_cut.isnumeric()), "Value must be 0 or 1!"
+        assert(int(change_cut)==0 or int(change_cut)==1), "Value must be 0 or 1!"
         
+        if (int(change_cut)==1):
+            cutoff_idr = input("Define new accepted fraction (e.g. 0.50): ")
+            assert(float(cutoff_idr)>=0.5 and float(cutoff_idr)<=1.0), "Value must be between 0 and 1!"
+            min_size_idr = input("Define new accepted minimum of residues (e.g. 10): ")
+            assert(min_size_idr.isnumeric()), "Value must be higher than 10!"
+            assert(int(min_size_idr)>10), "Value must be higher than 10!"
+            
+        if not "path_pdb_files" in locals_var:
+            path_pdb_files = input("Please inform the complete path where the PDB/CIF files will be stored: ")
+            assert(os.path.exists(path_pdb_files)), "Please provide an existing directory with the proper permissions to save and delete files."
+            
     """ Here your output will be a csv file with several extractions and 
     calculations of PolyX or PolyXY properties. """
         
@@ -217,29 +217,27 @@ if (int(num_sel)==2 or int(num_sel)==3):
     The output is a polyX/XY detailed file with extra PDB info and IDR/PDB info. '''
     
     out_files = sorted([f.path for f in os.scandir(comp_path_un) if os.path.isfile(f)])
-    poly_all_path = resources.get_pdbOut_names(out_files, 'data_all_'+source+'.csv', "")
-    if poly_all_path=="":
-        # IDR final file
-        message = "The final data_all_idr file is not in the main folder.\nYou can't execute this step before step 5."
-        idr_all_path = resources.get_pdbOut_names(out_files, 'data_all_idr.csv', message)
-        # Poly details file
-        message = "Detailed {0}_details.csv file is not in the main folder.\nYou can't execute this step before step 4.".format(source)
-        poly_details_path = resources.get_pdbOut_names(out_files, source+'_details.csv', message)
+    # IDR final file
+    message = "The final data_all_idr file is not in the main folder.\nYou can't execute this step before step 5."
+    idr_all_path = resources.get_pdbOut_names(out_files, 'data_all_idr.csv', message)
+    # Poly details file
+    message = "Detailed {0}_details.csv file is not in the main folder.\nYou can't execute this step before step 4.".format(source)
+    poly_details_path = resources.get_pdbOut_names(out_files, source+'_details.csv', message)
+    
+    # Load all the PDB paths required to extract the information about the region
+    pdb_files = resources.get_pdb_directory(comp_path)
+    
+    if not "pdb_mask_path" in locals_var:
+        message = "No previous masked file located in the pdb folder.\nYou can't execute this step before execute step 0."
+        pdb_mask_path = resources.get_pdbOut_names(pdb_files, '_pdb_masked.txt', message)
         
-        # Load all the PDB paths required to extract the information about the region
-        pdb_files = resources.get_pdb_directory(comp_path)
+    if not "dssp_path" in locals_var:
+        message = "No previous 2D pickle file located in the pdb folder.\nYou can't execute this step before execute step 0."
+        dssp_path = resources.get_pdbOut_names(pdb_files, '_ss_masked.pickle', message)
         
-        if not "pdb_mask_path" in locals_var:
-            message = "No previous masked file located in the pdb folder.\nYou can't execute this step before execute step 0."
-            pdb_mask_path = resources.get_pdbOut_names(pdb_files, '_pdb_masked.txt', message)
-            
-        if not "dssp_path" in locals_var:
-            message = "No previous 2D pickle file located in the pdb folder.\nYou can't execute this step before execute step 0."
-            dssp_path = resources.get_pdbOut_names(pdb_files, '_ss_masked.pickle', message)
-            
-        if not "path_coords" in locals_var:
-            message = "No PDB coordinates file located in the main folder.\nYou can't execute this step before step 5."
-            path_coords = resources.get_pdbOut_names(out_files, '_coords_pdb.csv', message)
+    if not "path_coords" in locals_var:
+        message = "No PDB coordinates file located in the main folder.\nYou can't execute this step before step 5."
+        path_coords = resources.get_pdbOut_names(out_files, '_coords_pdb.csv', message)
 
 
 # Now running all
@@ -249,12 +247,11 @@ if int(num_sel)==1:
     
     tab_idr = idr.extract_json(path1, key, name)
     print("\nTab file {0} with MobiDB predictions was saved to disk.".format(os.path.basename(tab_idr)))
-       
-    if idr_details=="":
-        idr_details, idr_fasta_path = idr.run_all(path_fasta, tab_idr)
-        print("\nFiltered fasta ({0}) and IDR details ({1}) were saved to disk.".format(os.path.basename(idr_fasta_path), os.path.basename(idr_details)))
+   
+    idr_details, idr_fasta_path = idr.run_all(path_fasta, tab_idr)
+    print("\nFiltered fasta ({0}) and IDR details ({1}) were saved to disk.".format(os.path.basename(idr_fasta_path), os.path.basename(idr_details)))
     
-    print("\nThe files you need for BlastP are ready! Generate your blast XML file and come back.\nWe'll optimize our time by running another step now...\n\n\nDON'T FORGET THE BLASTP.")
+    print("\nThe files you need for BlastP are ready! Generate your blast XML file and come back.\nWe'll optimize our time by running another step now...\n\n\nDON'T FORGET TO RUN YOUR BLASTP.")
     
     _ = idr.get_cider_props(idr_details, "idr")
     
@@ -283,7 +280,7 @@ if (int(num_sel)==2 or int(num_sel)==3):
     print("IDR details ({0}) were saved to disk.".format(os.path.basename(poly_details_path)))
     
     if poly_all_path=="":
-        poly_all_path, polyss_path = poly.main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, file_names, path_coords, source, float(cutoff), int(min_size))
+        poly_all_path, polyss_path = poly.main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, file_names, path_coords, path_fasta, source, float(cutoff), int(min_size))
         print("Poly details ({0}) and Poly 2D data were saved to disk.\n\nENJOY!!!".format(os.path.basename(poly_all_path), os.path.basename(polyss_path)))
     
     end_time = time.time()

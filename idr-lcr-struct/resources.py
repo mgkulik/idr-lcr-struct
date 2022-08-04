@@ -70,9 +70,9 @@ def transform_time(start, end):
     return(str_time)
     
 
-def save_file(lst, path):
+def save_file(lst, path, mode="a"):
     ''' Save list to txt file with no separator. '''
-    with open(path, 'a') as file:
+    with open(path, mode) as file:
         for data in lst:
           file.write(data)
 

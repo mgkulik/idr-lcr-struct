@@ -262,6 +262,16 @@ def final_2Ddata(df_poly_details, df_2D_details):
     return df_2D_details
 
 
+def subset_fasta(fasta_data, df_poly_details):
+    ''' Creating a fasta with the subset of uniprot ids of interest. '''
+    seq_lst = []
+    un_seq_names = df_poly_details.loc[~df_poly_details["pdb_name"].isna(), "seq_name"]
+    inter_seqs = np.intersect1d(un_seq_names, list(fasta_data.keys())).tolist()
+    for i in range(0, len(inter_seqs)):
+        seq_lst.append(fasta_data[inter_seqs[i]])
+    return (seq_lst)
+
+
 ### MAIN POLY SESSION
 def main_poly(seqs_path, polyXY_path, idrcsv_path, source, n_aa, cutoff, min_size):
     ''' Collecting poly info and their relation to IDRs. '''
@@ -293,7 +303,7 @@ def main_poly(seqs_path, polyXY_path, idrcsv_path, source, n_aa, cutoff, min_siz
 
 
 ### MAIN IDR POLY SESSION
-def main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, file_names, path_coords, source, cutoff, min_size):
+def main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, file_names, path_coords, path_fasta, source, cutoff, min_size):
     ''' Now crossing Poly with PDBs. '''
     
     basis_path = resources.get_dir(idr_all_path)+"/"+resources.get_filename(idr_all_path)+"_"
@@ -318,4 +328,11 @@ def main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, fil
     df_2D_details = final_2Ddata(df_poly_details, df_2D_details)
     polyss_path = basis_path+"data_ss_"+source+".csv"
     df_2D_details.to_csv(polyss_path, index=False)
+    
+    # Generate a subset of the fasta with only the sequences overlaping the 3 sets
+    fasta_data,_,_ = resources.read_fasta(path_fasta)
+    seq_lst = subset_fasta(fasta_data, df_poly_details)
+    fastaout = basis_path+"idr_poly_pdb.fasta"
+    resources.save_fastas(seq_lst, fastaout)
+    
     return basis_path+poly_all_path, polyss_path

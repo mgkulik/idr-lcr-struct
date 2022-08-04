@@ -1510,11 +1510,11 @@ def clean_pickles(basis_path, file_names):
         os.remove(comp_name)
 
 
-def main_merge_idrPdb(idrs_path, pdb_path, file_names, pdb_det_path, cutoff):
+def main_merge_idrPdb(idrs_path, blast_path, file_names, pdb_det_path, cutoff):
     ''' Parts 1 and 2 - Main function IDR-PDB, filtering just synthetic strucures. '''
     # This process can take several minutes to run.
     
-    basis_path = resources.get_dir(pdb_path)+"/"+resources.get_filename(pdb_path)+"_"
+    basis_path = resources.get_dir(blast_path)+"/"+resources.get_filename(blast_path)+"_"
     
     clean_pickles(basis_path, file_names)
     
@@ -1526,7 +1526,7 @@ def main_merge_idrPdb(idrs_path, pdb_path, file_names, pdb_det_path, cutoff):
     
     print("\nMaking the XML file provided by blastP easier to my use...")    
     # Starting with the extraction of each blast pair from the xml file
-    blast_pickle = extract_blast_pairs(pdb_path, pickle_sz, sep1, sep2)
+    blast_pickle = extract_blast_pairs(blast_path, pickle_sz, sep1, sep2)
     gc.collect()
     
     df_idr = pd.read_csv(idrs_path)
