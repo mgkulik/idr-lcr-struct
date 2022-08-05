@@ -291,18 +291,20 @@ def define_overlaps(pos):
     return res, sz_overlaps
 
 
-def filter_kept_idrs(idrs_removed, un_ids, starts_ends, idr_sizes, evalues, gen_info):
+def filter_kept_idrs(idrs_removed, un_ids, starts_ends, idr_sizes, evalues, gen_info=None):
     ''' Removing IDRs with overlaps already assigned to a lower homology group. 
     This action will both save memory and make sure no data be wrongly overlaped. '''
     if len(idrs_removed)>0:
         _, pdb_removed0, idx_all_un = np.unique(un_ids[:,1], return_index=True, return_inverse=True)
         _, pdb_removed1, _ = np.intersect1d(un_ids[:,1], idrs_removed, return_indices=True)
         idx_rep_removed = np.isin(pdb_removed0[idx_all_un], pdb_removed1)
-        un_ids_n = np.delete(un_ids, idx_rep_removed, 0)
-        starts_ends_n = np.delete(starts_ends, idx_rep_removed, 0)
-        idr_sizes_n = np.delete(idr_sizes,  idx_rep_removed, 0)
-        evalues_n = np.delete(evalues, idx_rep_removed, 0)
-        gen_info_n = np.delete(gen_info, idx_rep_removed, 0)
+        if (gen_info==None):
+            un_ids_n = np.delete(un_ids, idx_rep_removed, 0)
+            starts_ends_n = np.delete(starts_ends, idx_rep_removed, 0)
+            idr_sizes_n = np.delete(idr_sizes,  idx_rep_removed, 0)
+            evalues_n = np.delete(evalues, idx_rep_removed, 0)
+        else:
+            gen_info_n = np.delete(gen_info, idx_rep_removed, 0)
     return un_ids_n, starts_ends_n, idr_sizes_n, evalues_n, gen_info_n
     
 
@@ -346,7 +348,7 @@ def get_overlap_size(sz_over, idr_sizes):
     return over_perc
 
 
-def extract_short_overlaps(sz_over, over_perc, cutoff=.5, min_sz=30):
+def extract_short_overlaps(sz_over, over_perc, cutoff=.5, min_sz=10):
     ''' Get the short overlaps bool list and the not long ones, to ensure no
     short are selected if there are long ones in the same IDR. Returns a boolean
     array to use in the selection of the short and long ones. '''
@@ -415,7 +417,7 @@ def filter_pdb_array(arr_data, filtered_eval):
     return filtered_arr
 
 
-def merge_noIDRs_pdbs(df_noPDB, df_idrs_dt, pdbs_overlap, min_eval, max_eval, prefix):
+def merge_noIDRs_pdbs(idrs_all_nopdb, df_idrs_dt, pdbs_overlap, min_eval, max_eval, prefix):
     ''' Adds the PDB overlaps data to the IDR dataframe. '''
     
     if max_eval==0.0001:
@@ -452,7 +454,7 @@ def merge_noIDRs_pdbs(df_noPDB, df_idrs_dt, pdbs_overlap, min_eval, max_eval, pr
     #df_all_pdbs["num_count"] = df_all_pdbs.groupby(prefix+'_name')['val'].cumsum()
     #df_all_pdbs = df_all_pdbs.loc[df_all_pdbs["num_count"]<=20, cols2add]
     
-    df_all_pdbs = df_all_pdbs.loc[~df_all_pdbs[prefix+'_name'].isin(df_noPDB[prefix+'_name'].unique())]
+    df_all_pdbs = df_all_pdbs.loc[~df_all_pdbs[prefix+'_name'].isin(idrs_all_nopdb[prefix+'_name'].unique())]
     df_all_pdbs['removed_on_s'] = smax_eval
     df_all_pdbs['removed_on'] = smax_eval_name
     df_all_pdbs['kept_on'] = smin_eval
@@ -556,7 +558,7 @@ def report_sizes(idrs_nopdb, idrs_nooverlap, idrs_shortoverlap, df_idrs_dt, prot
     print()
 
 ##### FUNC get_all #####
-def generate_all_dfs(basis_path, df_idr, min_eval, max_eval, prefix="idr", cutoff=(.5,30), save=False, file_names=''):
+def generate_all_dfs(basis_path, df_idr, min_eval, max_eval, prefix="idr", cutoff=(.5,10), save=False, file_names=''):
     ''' Extract the information of the pair IDR/PDB and add to a global dataframe
     
     Inputs:
@@ -607,14 +609,13 @@ def generate_all_dfs(basis_path, df_idr, min_eval, max_eval, prefix="idr", cutof
     evalues = resources.open_pickle(file_names[1], basis_path)
     idr_sizes = resources.open_pickle(file_names[2], basis_path)
     un_ids = resources.open_pickle(file_names[3], basis_path)
-    gen_info = resources.open_pickle(file_names[4], basis_path)
     
     # Removing the IDRs with overlaps in the last iteration our strategy appends
     # the cases with overlaps in the iteration to the previous one
     if ('removed_on' in df_idr) and (not save):
         df_idr_filtered = df_idr.loc[df_idr['removed_on'].isna()]
         idrs_removed = df_idr.loc[~(df_idr['removed_on'].isna()), prefix+'_name'].unique()
-        un_ids, starts_ends, idr_sizes, evalues, gen_info = filter_kept_idrs(idrs_removed, un_ids, starts_ends, idr_sizes, evalues, gen_info)
+        un_ids, starts_ends, idr_sizes, evalues, _ = filter_kept_idrs(idrs_removed, un_ids, starts_ends, idr_sizes, evalues)
     else:
         df_idr_filtered = df_idr.copy()
     
@@ -624,7 +625,6 @@ def generate_all_dfs(basis_path, df_idr, min_eval, max_eval, prefix="idr", cutof
     un_ids = filter_pdb_array(un_ids, pdb_qual)
     idr_sizes = filter_pdb_array(idr_sizes, pdb_qual)
     evalues = filter_pdb_array(evalues, pdb_qual)
-    gen_info = filter_pdb_array(gen_info, pdb_qual)
     # Generates overlap information
     pos_over, sz_over = define_overlaps(starts_ends)
     over_perc = get_overlap_size(sz_over, idr_sizes)
@@ -644,14 +644,24 @@ def generate_all_dfs(basis_path, df_idr, min_eval, max_eval, prefix="idr", cutof
     idrs_shortoverlap = idrs_shortoverlap.assign(pdb_type='Short Overlaps')
     idrs_all_nopdb = pd.concat([idrs_nopdb, idrs_nooverlap, idrs_shortoverlap], ignore_index=True)
     
+    # Loading the haviest file only when needed
+    gen_info = resources.open_pickle(file_names[4], basis_path)
+    if ('removed_on' in df_idr) and (not save):
+        df_idr_filtered = df_idr.loc[df_idr['removed_on'].isna()]
+        idrs_removed = df_idr.loc[~(df_idr['removed_on'].isna()), prefix+'_name'].unique()
+        _, _, _, _, gen_info = filter_kept_idrs(idrs_removed, un_ids, starts_ends, idr_sizes, evalues, gen_info)
+    gen_info = filter_pdb_array(gen_info, pdb_qual)
+    
     # Filtering IDRs with long overlaps (for validation purposes)
     cols=['seq_name', prefix+'_name', 'hit_id', 'pdb_name', 'hsp_id', 'bitscore', 
           'hit_len', 'pdb_start', 'pdb_end', 'identity', 'seq_align_start', 
           'seq_align_end', 'seq_len', 'internal_id', 'internal_id2', 'over_start', 'over_end', 
           prefix+'_start', prefix+'_end', 'seq_start', 'seq_end', 'pdb_evalue', 'over_perc', 'over_sz']
     idrs_overlap, pdbs_overlap, pdbs_short = filter_overlaps(df_idr_filtered,un_ids,pos_over,starts_ends,evalues,gen_info,short_bool,long_bool,over_perc,sz_over,cols,prefix)
+    # Removing it as soon we are done using it
     report_sizes(idrs_nopdb, idrs_nooverlap, idrs_shortoverlap, df_idr, prots_nopdb, idrs_all_nopdb, max(evalues))
     df_info_nopdb = eval_no_overlaps(over_perc, gen_info, starts_ends, un_ids, evalues, prefix)
+    del gen_info
     if save:
         name = re.sub(r'\.', '-', str(max_eval))
         idrs_all_nopdb.to_csv(basis_path+'nopdb_all_'+prefix+'_'+name+'.csv', index=False)
@@ -673,7 +683,8 @@ def apply_pdb_data(df_idr_new, pdb_det_path):
     df_idr_new["pdb_id"] = df_idr_new.pdb_name.str.split("_", n=1, expand=True)[0]
     df_idr_new = pd.merge(df_idr_new, df_pdb_details, how="left", on="pdb_id")
     # The merging process added nan in the column and was affecting the filtering process
-    df_idr_new = df_idr_new.loc[df_idr_new["synthetic"]!=True, :]
+    ids_idr_synth = list(df_idr_new.loc[df_idr_new["synthetic"]==True, "internal_id"])
+    df_idr_new.loc[df_idr_new['internal_id'].isin(ids_idr_synth), "pdb_name":] = np.nan
     df_idr_new.drop('synthetic', axis=1, inplace=True)
     return df_idr_new
 
@@ -1494,7 +1505,7 @@ def correct_pdb_coords(pdb_coords, df_idr_details, idr_all_path, prefix="idr"):
 
 def clean_pickles(basis_path, file_names):
     ''' Delete previous pickle files to make sure no append is made wrongly. '''
-    
+        
     all_files = [f.path for f in os.scandir(resources.get_dir(basis_path)) if os.path.isfile(f)]
     if len(file_names)==5:
         temp_files = file_names.copy()
@@ -1556,15 +1567,14 @@ def main_merge_idrPdb(idrs_path, blast_path, file_names, pdb_det_path, cutoff):
     # to reduce the number of alignments and improve performance.
     eval_file = 'EVAL_data_noSeqs_idr.csv'
     df_idr_new = mark_no_homologs(basis_path, df_idr_new, eval_file)
-    gc.collect() 
     return basis_path+eval_file
     
 
-def main_ss_annotation(idrs_path, pdb_mask_path, ss_file_path, dssp_path, idr_fasta_path, file_names, cutoff, save_dup=True):
+def main_ss_annotation(idrs_int_path, pdb_mask_path, ss_file_path, dssp_path, idr_fasta_path, file_names, cutoff, save_dup=True):
     ''' Parts 3 - Main function IDR-PDB, getting the 2D structure and selecting 
     best candidates. '''
     
-    basis_path = resources.get_dir(idrs_path)+"/"+resources.get_filename(idrs_path)+"_"
+    basis_path = resources.get_dir(idrs_int_path)+"/"+resources.get_filename(idrs_int_path)+"_"
     
     if len(file_names)==5:
         file_names.insert(0, 'starts_ends')
@@ -1573,7 +1583,7 @@ def main_ss_annotation(idrs_path, pdb_mask_path, ss_file_path, dssp_path, idr_fa
     # object for pdb_name and kept_on before saving the dataframe the warning 
     # was showed. It seams its just thrown in the loading, so I simply used the 
     # suggested low memory clause.
-    df_idr_new = pd.read_csv(idrs_path, low_memory=False)
+    df_idr_new = pd.read_csv(idrs_int_path, low_memory=False)
     df_idr_details = append_pdb_details(pdb_mask_path, df_idr_new)
     # Important, the ss fasta is unsordered. ALWAYS use it through key selection from the dictionary.
     df_idr_details = append_ss_details(ss_file_path, df_idr_details)
@@ -1613,10 +1623,10 @@ def main_pos_files(idr_all_path, pdb_files, path_pdb_files):
         print("ATENTION: There are still some CIF files we were not able to download.\nCheck the file sitll_missing_cif_list.txt and try to download them manually.\nWe will move on now considering the files available on disk!")
     
     gc.collect() # The memory is exploding here
-    df_pdb_coords, df_chain = pdbDssp.extract_from_cif_all(path_pdb_files, cif_ids)
+    df_pdb_coords, df_pdb_chains = pdbDssp.extract_from_cif_all(path_pdb_files, cif_ids)
     path_coords = basis_path+"coords_pdb.csv"
-    path_chains = basis_path+"chains_pdb.csv"
     df_pdb_coords.to_csv(path_coords, index=False)
-    df_chain.to_csv(path_chains, index=False)
     correct_pdb_coords(df_pdb_coords, df_idr_details, idr_all_path, "idr")
+    path_chains = basis_path+"chains_pdb.csv"
+    df_pdb_chains.to_csv(path_chains, index=False)
     

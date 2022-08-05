@@ -53,7 +53,10 @@ def extract_polyXY_features(polyXY_path, fasta_data, tp=2):
     with open(polyXY_path, 'r') as handle:
         next(handle)
         for line in enumerate(handle):
+            # PolyX2 has a complete different order of columns now
             rowsplit = line[1].rstrip("\n").split("\t")
+            if tp==1:
+                rowsplit = [rowsplit[5], rowsplit[0], rowsplit[1], rowsplit[2], rowsplit[3], rowsplit[4], rowsplit[6]]
             uniprot_id = rowsplit[0].split("|")[1]
             seq_val = fasta_data[uniprot_id]
             seq_aa = str(seq_val.seq)
@@ -325,14 +328,15 @@ def main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, fil
     df_pdb_coords = pd.read_csv(path_coords)
     cross.correct_pdb_coords(df_pdb_coords, df_poly_details, poly_all_path, "poly")
     
-    df_2D_details = final_2Ddata(df_poly_details, df_2D_details)
+    if (source=="polyxy"):
+        df_2D_details = final_2Ddata(df_poly_details, df_2D_details)
     polyss_path = basis_path+"data_ss_"+source+".csv"
     df_2D_details.to_csv(polyss_path, index=False)
     
     # Generate a subset of the fasta with only the sequences overlaping the 3 sets
     fasta_data,_,_ = resources.read_fasta(path_fasta)
     seq_lst = subset_fasta(fasta_data, df_poly_details)
-    fastaout = basis_path+"idr_poly_pdb.fasta"
+    fastaout = basis_path+"idr_"+source+"_pdb.fasta"
     resources.save_fastas(seq_lst, fastaout)
     
     return basis_path+poly_all_path, polyss_path

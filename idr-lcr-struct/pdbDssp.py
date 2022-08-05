@@ -596,22 +596,26 @@ def extract_dbref_cif(comppath, base):
         # I was using first _gen and if it didn't exist _nat, but sometimes they happend together
         category_dict = content[0].get_mmcif_category('_entity_src_gen')
         if (len(category_dict)!=0):
-            keys = ["pdbx_gene_src_ncbi_taxonomy_id", "pdbx_gene_src_scientific_name"]
+            keys = ["pdbx_gene_src_ncbi_taxonomy_id", "pdbx_gene_src_scientific_name", "pdbx_beg_seq_num", "pdbx_end_seq_num"]
             for i in range(0, len(category_dict["entity_id"])):
                 molid = "MOL_ID: "+category_dict["entity_id"][i]
                 organism_id = category_dict[keys[0]][i]
                 organism_name = category_dict[keys[1]][i]
+                start_coords = category_dict[keys[2]][i]
+                end_coords = category_dict[keys[3]][i]
                 if (organism_name is not None) and (organism_id is not None):
-                    lst_organism.append([base, molid, organism_id, organism_name.upper(), "gen"])
+                    lst_organism.append([base, molid, organism_id, organism_name.upper(), start_coords, end_coords, "gen"])
         category_dict = content[0].get_mmcif_category('_entity_src_nat')
         if (len(category_dict)!=0):
-            keys = ["pdbx_ncbi_taxonomy_id", "pdbx_organism_scientific"]
+            keys = ["pdbx_ncbi_taxonomy_id", "pdbx_organism_scientific", "pdbx_beg_seq_num", "pdbx_end_seq_num"]
             for i in range(0, len(category_dict["entity_id"])):
                 molid = "MOL_ID: "+category_dict["entity_id"][i]
                 organism_id = category_dict[keys[0]][i]
                 organism_name = category_dict[keys[1]][i]
+                start_coords = category_dict[keys[2]][i]
+                end_coords = category_dict[keys[3]][i]
                 if (organism_name is not None) and (organism_id is not None):
-                    lst_organism.append([base, molid, organism_id, organism_name.upper(), "nat"])
+                    lst_organism.append([base, molid, organism_id, organism_name.upper(), start_coords, end_coords, "nat"])
         # Equivalent to EXPDTA
         category_dict = content[0].get_mmcif_category('_exptl')
         if (len(category_dict)!=0):
@@ -623,6 +627,13 @@ def extract_dbref_cif(comppath, base):
         eof=True
     return lst_db_ref, lst_chain, lst_organism, lst_exp, eof
 
+
+def join_organisms_coords(df_organism, df_pdb_coords):
+    ''' Found out that the chimeric sequences can belong to several different
+    organisms. There is no direct link between organisms and aligned id, so 
+    we need to use the provided coordinates to map them together.
+    '''
+    return df_pdb_coords
 
 def extract_from_cif_all(path_pdb_files, sel_ids):
     ''' Get all extra information from the CIF files, now targeting just the 
@@ -681,14 +692,12 @@ def extract_from_cif_all(path_pdb_files, sel_ids):
     # All files should have coordinates and experiments. Merging and not discarding any side
     df_pdb_coords = pd.merge(df_pdb_coords, df_exp, how="outer", on="pdb_id")
     # aligned organism data
-    df_organism = pd.DataFrame(ss_organism, columns=["pdb_id", "mol_id", 
-                                                     "aligned_organism_id", 
-                                                     "aligned_organism_name",
-                                                     "src"])
-    # As both files have the same index columns, merged them together. Not all
-    # files have organisms, but surely chains and molecules.
-    df_chain = pd.merge(df_chain, df_organism, how="left", on=["pdb_id", "mol_id"])
-    
+    cols_org = ["pdb_id", "mol_id", "aligned_organism_id", "aligned_organism_name",
+                "dbrefs_start", "dbrefs_end", "src"]
+    df_organism = pd.DataFrame(ss_organism, columns=cols_org)
+    # Need to use the coordinates provided in the organism session to find the
+    # equivalent aligned ID (start and final coords can be different)
+    df_pdb_coords = join_organisms_coords(df_organism, df_pdb_coords)
     tot_in_sec = time.time() - start_time
     print("\n--- %s seconds ---" % (tot_in_sec))
     try:

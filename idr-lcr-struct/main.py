@@ -107,12 +107,12 @@ if int(num_sel)==1:
     calculations of IDR properties and a reduced fasta containing only the
     sequences with predicted IDRs. """
     
-    if not "idr_details" in locals_var:
+    if not "idrs_path" in locals_var:
         
         #out_files = sorted([f.path for f in os.scandir(comp_path_un) if os.path.isfile(f)])
         #idr_details = resources.get_pdbOut_names(out_files, un_prot+'_mobidb_idr_details.csv', "")
         # Run in case not ran before
-        #if idr_details=="":
+        #if idrs_path=="":
         if not "path_fasta" in locals_var:
             path_fasta = input("Provide the path for the proteome fasta. \nIt must be available in the directory provided before and start with the Uniprot proteome ID: ")
             path_fasta = resources.valid_file(path_fasta, comp_path_un)
@@ -154,8 +154,8 @@ if (int(num_sel)==2 or int(num_sel)==3):
         idr_fasta_path = os.path.join(comp_path_un, un_prot+"_mobidb_idr.fasta")
        
         
-    if not "idr_details" in locals_var:
-        idr_details = os.path.join(comp_path_un, un_prot+"_mobidb_idr_details.csv")
+    if not "idrs_path" in locals_var:
+        idrs_path = os.path.join(comp_path_un, un_prot+"_mobidb_idr_details.csv")
     
     if int(num_sel)!=3:
         if not "blast_path" in locals_var:
@@ -172,6 +172,7 @@ if (int(num_sel)==2 or int(num_sel)==3):
             min_size_idr = input("Define new accepted minimum of residues (e.g. 10): ")
             assert(min_size_idr.isnumeric()), "Value must be higher than 10!"
             assert(int(min_size_idr)>10), "Value must be higher than 10!"
+        
             
         if not "path_pdb_files" in locals_var:
             path_pdb_files = input("Please inform the complete path where the PDB/CIF files will be stored: ")
@@ -183,15 +184,15 @@ if (int(num_sel)==2 or int(num_sel)==3):
     cutoff=.6
     min_size=4
     
-    if not "tab_poly" in locals_var:
-        tab_poly = input("Provide the path for the Poly tab file. \nIt must be available in the directory provided before and start with the Uniprot proteome ID:  ")   
-        tab_poly = resources.valid_file(tab_poly, comp_path_un)
+
+    tab_poly = input("Provide the path for the Poly tab file. \nIt must be available in the directory provided before and start with the Uniprot proteome ID:  ")   
+    tab_poly = resources.valid_file(tab_poly, comp_path_un)
     if not "path_fasta" in locals_var:
         path_fasta = input("Provide the path for the proteome fasta. \nIt must be available in the directory provided before and start with the Uniprot proteome ID: ")
         path_fasta = resources.valid_file(path_fasta, comp_path_un)
         
-    if not "idr_details" in locals_var:
-        idr_details = os.path.join(comp_path_un, un_prot+"_mobidb_idr_details.csv")
+    if not "idrs_path" in locals_var:
+        idrs_path = os.path.join(comp_path_un, un_prot+"_mobidb_idr_details.csv")
     
     n_aa = input("Number of different residues per repeat (e.g. 1=homorepeat, 2=direpeat ...): ")
     assert(n_aa.isnumeric()), "Value must be bigger than 0!"
@@ -248,12 +249,12 @@ if int(num_sel)==1:
     tab_idr = idr.extract_json(path1, key, name)
     print("\nTab file {0} with MobiDB predictions was saved to disk.".format(os.path.basename(tab_idr)))
    
-    idr_details, idr_fasta_path = idr.run_all(path_fasta, tab_idr)
-    print("\nFiltered fasta ({0}) and IDR details ({1}) were saved to disk.".format(os.path.basename(idr_fasta_path), os.path.basename(idr_details)))
+    idrs_path, idr_fasta_path = idr.run_all(path_fasta, tab_idr)
+    print("\nFiltered fasta ({0}) and IDR details ({1}) were saved to disk.".format(os.path.basename(idr_fasta_path), os.path.basename(idrs_path)))
     
     print("\nThe files you need for BlastP are ready! Generate your blast XML file and come back.\nWe'll optimize our time by running another step now...\n\n\nDON'T FORGET TO RUN YOUR BLASTP.")
     
-    _ = idr.get_cider_props(idr_details, "idr")
+    _ = idr.get_cider_props(idrs_path, "idr")
     
     end_time = time.time()
     time_formated = resources.transform_time(start_time, end_time)
@@ -264,9 +265,9 @@ if int(num_sel)==2:
     
     start_time = time.time()
 
-    idrs_path = idrPdb.main_merge_idrPdb(idr_details, blast_path, file_names, pdb_det_path, (cutoff_idr, min_size_idr))
-    # Extract the information about PDBs over IDRs and select the best candidates based on the filtering criteria.
-    idr_all_path = idrPdb.main_ss_annotation(idrs_path, pdb_mask_path, ss_file_path, dssp_path, idr_fasta_path, file_names, (cutoff_idr, min_size_idr), save_dup=True)
+    idrs_int_path = idrPdb.main_merge_idrPdb(idrs_path, blast_path, file_names, pdb_det_path, (cutoff_idr, min_size_idr))
+    # Extract the inUP000005640formation about PDBs over IDRs and select the best candidates based on the filtering criteria.
+    idr_all_path = idrPdb.main_ss_annotation(idrs_int_path, pdb_mask_path, ss_file_path, dssp_path, idr_fasta_path, file_names, (cutoff_idr, min_size_idr), save_dup=True)
     # Now get all the CIF files that are missing and extract the auth to calculate the real PDB coordinates
     idrPdb.main_pos_files(idr_all_path, pdb_files, path_pdb_files)
 
@@ -276,12 +277,11 @@ if (int(num_sel)==2 or int(num_sel)==3):
     if int(num_sel)==3:
         start_time = time.time()
     
-    poly_details_path = poly.main_poly(path_fasta, tab_poly, idr_details, source, int(n_aa), float(cutoff), int(min_size))
-    print("IDR details ({0}) were saved to disk.".format(os.path.basename(poly_details_path)))
+    poly_details_path = poly.main_poly(path_fasta, tab_poly, idrs_path, source, int(n_aa), float(cutoff), int(min_size))
+    print("Poly details ({0}) were saved to disk.".format(os.path.basename(poly_details_path)))
     
-    if poly_all_path=="":
-        poly_all_path, polyss_path = poly.main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, file_names, path_coords, path_fasta, source, float(cutoff), int(min_size))
-        print("Poly details ({0}) and Poly 2D data were saved to disk.\n\nENJOY!!!".format(os.path.basename(poly_all_path), os.path.basename(polyss_path)))
+    poly_all_path, polyss_path = poly.main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, file_names, path_coords, path_fasta, source, float(cutoff), int(min_size))
+    print("Poly details ({0}) and Poly 2D data were saved to disk.\n\nENJOY!!!".format(os.path.basename(poly_all_path), os.path.basename(polyss_path)))
     
     end_time = time.time()
     time_formated = resources.transform_time(start_time, end_time)
