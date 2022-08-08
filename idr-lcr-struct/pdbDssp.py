@@ -389,6 +389,7 @@ def get_dbref_synthetic(comppath, base):
     with open(comppath, 'r') as handle:
         rowsplit = ""
         base_synt = ""
+        rel_date = []
         val_res = []
         for line in enumerate(handle):
             rowsplit = line[1].rstrip("\n").split(" ")
@@ -407,6 +408,10 @@ def get_dbref_synthetic(comppath, base):
                     idx_org_synt = content.find("32630")
                 if (idx_syntetic!=-1 and idx_yes!=-1) or idx_org_synt!=-1:
                     base_synt = base
+            if (rowsplit[0]=="REVDAT"):
+                if len(rowsplit)>=5:
+                    if (rowsplit[4]=="0"):
+                        rel_date.append([base, datetime.strptime(rowsplit[2],'%d-%b-%y').strftime('%Y-%m-%d')])
             if (rowsplit[0]=="REMARK"):
                 if len(rowsplit)>2:
                     if (rowsplit[2]=="RESOLUTION."):
@@ -415,14 +420,15 @@ def get_dbref_synthetic(comppath, base):
                             val_res.append([base, float(val)])
                 if (rowsplit[1]=="3"):
                     break
-    return base_synt, val_res
+    return base_synt, val_res, rel_date
 
 
 def get_dbref_synthetic_cif(comppath, base):
     ''' Extracts the information of if the structure is syntetic and its resolution
     from the cif file using the gemni package. '''
     base_synt = ""
-    val = " "
+    val = " "  # Had to add a space here because empty can be extracted from the data
+    rel_date = []
     val_res = []
     with open(comppath, 'r') as handle:
         content = cif.read_string(handle.read())
@@ -445,22 +451,29 @@ def get_dbref_synthetic_cif(comppath, base):
                     for i in ids:
                         if int(i)==32630:
                             base_synt = base
+    # Release date
+    category_dict = content[0].get_mmcif_category('_pdbx_audit_revision_history')
+    if (len(category_dict)!=0):
+        val = category_dict["data_content_type"]
+        if (val[0] == "Structure model"):
+            rel_date.append([base, category_dict["revision_date"][0]])
+        val = " "
     # Extracting the resolution from each aligned PDB
     category_dict = content[0].get_mmcif_category('_reflns')
     if (len(category_dict)!=0):
         val = category_dict["d_resolution_high"][0]
-    if (isinstance(val, bool) or (val is None) or (val=="")):
+    if (isinstance(val, bool) or (val is None) or (val==" ")):
         category_dict = content[0].get_mmcif_category('_refine')
         if (len(category_dict)!=0):
             val = category_dict["ls_d_res_high"][0]
-    if (isinstance(val, bool) or (val is None) or (val=="")):
+    if (isinstance(val, bool) or (val is None) or (val==" ")):
         category_dict = content[0].get_mmcif_category('_em_3d_reconstruction')
         if (len(category_dict)!=0):
             val = category_dict["resolution"][0]
-    if ((val!=" ") and (val is not None)):
+    if ((val!=" ") and (val is not None) and (val is not None)):
         #print(base)
         val_res.append([base, float(val)])
-    return base_synt, val_res
+    return base_synt, val_res, rel_date
 
 
 def append_synt_df(df_res, ss_synt):
@@ -474,17 +487,42 @@ def append_synt_df(df_res, ss_synt):
     return df_res
 
 
+def filter_pdb_files(path_pdb_files, sel_ids):
+    ''' As Biopython DSSP annotations still have some limitations for cif files, 
+    to save disk space we prioritize PDB files downloads over cif, but after
+    the target selection we decided to use CIF files to extract extra info, because
+    they are more reliable. This caused some duplications of IDs on disk, so we 
+    must select our targets prioritizing the PDB files for general executions. '''
+    # Get PDB files
+    sel_files_pdb = np.array(sorted([f.path for f in os.scandir(path_pdb_files) if (re.search(r'\W*pdb.gz', f.path))]))
+    base_files_pdb = np.array([os.path.splitext(os.path.splitext(os.path.basename(f))[0])[0] for f in sel_files_pdb])
+    bool_idx_pdb = np.isin(base_files_pdb, sel_ids)
+    # Get CIF files and select just the difference
+    sel_files_cif = np.array(sorted([f.path for f in os.scandir(path_pdb_files) if (re.search(r'\W*cif.gz', f.path))]))
+    base_files_cif = np.array([os.path.splitext(os.path.splitext(os.path.basename(f))[0])[0] for f in sel_files_cif])
+    diff_cif = np.setdiff1d(base_files_cif, base_files_pdb)
+    # Select only the target IDs
+    dif_idx = np.isin(base_files_cif, diff_cif)
+    sel_files_cif = sel_files_cif[dif_idx]
+    base_files_cif = base_files_cif[dif_idx]
+    bool_idx_cif = np.isin(base_files_cif, sel_ids)
+    # Merge PDB and cif files
+    #sel_names = base_files_pdb[bool_idx_pdb].tolist()
+    #sel_names = sel_names+base_files_cif[bool_idx_cif].tolist()
+    #sel_names.sort()==sel_ids.sort()
+    sel_files = sel_files_pdb[bool_idx_pdb].tolist()
+    sel_files = sel_files+sel_files_cif[bool_idx_cif].tolist()
+    return (sel_files)
+
+
 def extract_from_pdb_file_synt(path_pdb_files, sel_ids, resolution_path):
     ''' Function will extract all data from the PDB file in a first interaction
     then not used again for the future executions. Process added after the DSSP
     annotation. It would take to long to re-process all DSSP just to generate
     the first version of this file. '''
     start_time = time.time()
-    ss_synt, ll_res =  [], []
-    sel_files = np.array(sorted([f.path for f in os.scandir(path_pdb_files) if (re.search(r'\W*.gz', f.path))]))
-    base_files = np.array([os.path.splitext(os.path.splitext(os.path.basename(f))[0])[0] for f in sel_files])
-    bool_idx = np.isin(base_files, sel_ids)
-    sel_files = sel_files[bool_idx].tolist()
+    ss_synt, ll_res, ll_release =  [], [], []
+    sel_files = filter_pdb_files(path_pdb_files, sel_ids)
     temp_path = os.path.join(path_pdb_files, 'temp')
     try:
         if not os.path.exists(temp_path):
@@ -493,7 +531,7 @@ def extract_from_pdb_file_synt(path_pdb_files, sel_ids, resolution_path):
         print ("Creation of the directory %s failed" % temp_path)
     i=1
     for name in sel_files:
-        out1, out2 = "", ""
+        out1, sel_files = "", ""
         lst_res = []
         basename = os.path.splitext(os.path.basename(name))[0]
         base = os.path.splitext(basename)[0]
@@ -502,13 +540,15 @@ def extract_from_pdb_file_synt(path_pdb_files, sel_ids, resolution_path):
         with gzip.open(name, 'r') as f_in, open(comppath, 'wb') as f_out:
             shutil.copyfileobj(f_in, f_out)
         if ext==".pdb":
-            out1, lst_res = get_dbref_synthetic(comppath, base)
+            out1, lst_res, rel_date = get_dbref_synthetic(comppath, base)
         else:
-            out1, lst_res = get_dbref_synthetic_cif(comppath, base)
+            out1, lst_res, rel_date = get_dbref_synthetic_cif(comppath, base)
         if (out1!=""):
             ss_synt.append(out1)
         if len(lst_res)>0:
             ll_res = ll_res + lst_res
+        if len(rel_date)>0:
+            ll_release = ll_release+rel_date
         if (i%10**4==0):
             print("{0} of {1} completed for the synthetics search.".format(str(i), str(len(sel_files))))
         os.remove(comppath)
@@ -517,8 +557,11 @@ def extract_from_pdb_file_synt(path_pdb_files, sel_ids, resolution_path):
     # This 4 PDB sequences have no organism and no indication of being synthetic.
     # They are old and engeneered. Checked even the .cif file, where they present an "?"
     ss_synt = ss_synt + ["1MJ0", "1N0Q", "1N0R", "3F0H"]
-    # Getting the resolution info
+    # Getting the resolution info and the release date
     df_res = pd.DataFrame(ll_res, columns=["pdb_id", "pdb_resolution"])
+    df_rel_date = pd.DataFrame(ll_release, columns=["pdb_id", "pdb_release"])
+    df_res = pd.merge(df_res, df_rel_date, how="outer", on="pdb_id")
+    # Appending synthetic IDs
     df_res = append_synt_df(df_res, ss_synt)
     tot_in_sec = time.time() - start_time
     print("--- %s seconds ---" % (tot_in_sec))
@@ -529,7 +572,7 @@ def extract_from_pdb_file_synt(path_pdb_files, sel_ids, resolution_path):
     return df_res
 
 
-def extract_from_pdb_file(path_pdb_files, path_pdb, date_start, det_old_path, sel_ids):
+def extract_from_pdb_file(path_pdb_files, path_pdb, date_start, sel_ids, det_old_path=""):
     ''' Load or annotate synthetics and other experiment info for PDB IDs 
     aligned to sequences . '''
     resolution_path = os.path.join(path_pdb, date_start+"_pdb_details.csv")
@@ -544,7 +587,7 @@ def extract_from_pdb_file(path_pdb_files, path_pdb, date_start, det_old_path, se
 def extract_dbref_cif(comppath, base):
     ''' Open each cif file and extract the targeted information:
     Source for the PDB files:
-    https://www.wwpdb.org/documentation/file-format-content/format33/sect3.html
+        
     Equivalences between PDB and CIF files:
     https://mmcif.wwpdb.org/docs/pdb_to_pdbx_correspondences.html
     '''
@@ -751,8 +794,8 @@ def main_dssp(path_pdb, path_ss_file, path_pdb_files, path_seqres):
     
         # Extracting essential info from the PDB files (type, resolution, interactions?)
         # _, ss_keys, _, _ = resources.extract_ss(path_ss_final)
-        # missing_ids = np.unique([ids.split("_")[0] for ids in ss_keys]).tolist()  # Run this if you want to take all ids from 2D structure file
-        df_pdb_details = extract_from_pdb_file(path_pdb_files, path_pdb, date_start, det_old_path, missing_ids)
+        # sel_ids = np.unique([ids.split("_")[0] for ids in ss_keys]).tolist()  # Run this if you want to take all ids from 2D structure file
+        df_pdb_details = extract_from_pdb_file(path_pdb_files, path_pdb, date_start, sel_ids, "")
         
 
     

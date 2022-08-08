@@ -54,6 +54,8 @@ if int(num_sel)==0:
     2D structures with DSSP and generate the masked file of PDB sequences based 
     on the missing residues. '''
     
+    path_pdb = os.path.join(comp_path, "pdb")
+    
     if not pdb_seq_url in locals_var:
         pdb_seq_url = "https://ftp.wwpdb.org/pub/pdb/derived_data/pdb_seqres.txt.gz"
         check = input("The current URL to download the PDB sequences is: {0}. Do you want to change it (y/n)?".format(pdb_seq_url))
