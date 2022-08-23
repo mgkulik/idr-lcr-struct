@@ -172,7 +172,9 @@ def extract_poly_idr(idrcsv_path, df_poly, cutoff=.6, min_size=6):
     ''' Add the information of all IDRs to the poly annotations. '''
 
     df_idr_details = pd.read_csv(idrcsv_path)
-    idrs_pos = df_idr_details.loc[:, ['seq_name', 'idr_name', 'idr_size', 'idr_start', 'idr_end']]
+    idrs_pos = df_idr_details.loc[:, ['seq_name', 'idr_name', 'uniref100', 
+                                      'uniref90', 'uniref50', 'idr_size', 
+                                      'idr_start', 'idr_end']]
     merged_pos = pd.merge(df_poly, idrs_pos, how="left", on="seq_name")
     merged_pos = merged_pos.sort_values(by=['idr_name', 'poly_name'])
     # Here instead of using the IDR real start and ends I use the ones calculated
@@ -205,6 +207,11 @@ def extract_poly_idr(idrcsv_path, df_poly, cutoff=.6, min_size=6):
     IDs_seq = pd.unique(merged_pos.loc[long_bool, 'poly_name']).tolist()
     df_poly_notSel = df_poly.loc[~df_poly['poly_name'].isin(IDs_seq), :]
     df_poly_new = pd.concat([merged_sel, df_poly_notSel])
+    # Duplication of poly_name can be caused by multiple IDR annotations.
+    # Adding an extra ID based on poly_name to solve this problem.
+    df_poly_new["poly_idx"] = df_poly_new.groupby('poly_name').cumcount()+1
+    df_poly_new["poly_name"] = df_poly_new["poly_name"] + "_" + polyXY_data["poly_idx"].astype(str)
+    df_poly_new = df_poly_new.drop('poly_idx', axis=1)
     
     return df_poly_new
 
