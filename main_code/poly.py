@@ -83,8 +83,10 @@ def extract_polyXY_features(polyXY_path, fasta_data, tp=2):
                     poly_part2_tp = resources.get_aa_type(poly_part2)
                 if (poly_part1_tp==poly_part2_tp):
                     poly_pair_tp = poly_part1_tp
+                elif ("Polar" in poly_part1_tp and "Polar" in poly_part2_tp):
+                    poly_pair_tp = "Polar Mixed charges"
                 else:
-                    poly_pair_tp = "Both"
+                    poly_pair_tp = "Polar / Non-Polar"
                 poly_aa = rowsplit[4]
             else:
                 poly_part2=""
@@ -313,7 +315,7 @@ def main_poly(seqs_path, polyXY_path, idrcsv_path, source, n_aa, cutoff, min_siz
 
 
 ### MAIN IDR POLY SESSION
-def main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, file_names, path_coords, path_fasta, source, cutoff, min_size):
+def main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, file_names, path_coords, path_fasta, source, cutoff, min_size, delim):
     ''' Now crossing Poly with PDBs. '''
     
     basis_path = resources.get_dir(idr_all_path)+"/"+resources.get_filename(idr_all_path)+"_"
@@ -329,7 +331,7 @@ def main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, fil
     # get the details of the PDB and SEQ alignment
     df_poly_details = cross.append_pdb_details(pdb_mask_path, df_poly_details)
     # Now we can calculate the PolyXY ss_region using the same functions. The filtering step is not required
-    df_poly_details, df_2D_details, _ = cross.get_dssp_idr(dssp_path, basis_path+file_names[-1]+".pickle", df_poly_details, basis_path, "poly", 50, source)
+    df_poly_details, df_2D_details, _ = cross.get_dssp_idr(dssp_path, basis_path+file_names[-1]+".pickle", df_poly_details, basis_path, "poly", delim, source)
     poly_all_path = "data_all_"+source+".csv"
     _ = cross.mark_no_homologs(basis_path, df_poly_details, poly_all_path)
     df_pdb_coords = pd.read_csv(path_coords)
@@ -337,7 +339,7 @@ def main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, fil
     
     if (source=="polyxy"):
         df_2D_details = final_2Ddata(df_poly_details, df_2D_details)
-    polyss_path = basis_path+"data_ss_"+source+".csv"
+    polyss_path = basis_path+"data_ss"+str(delim)+"_"+source+".csv"
     df_2D_details.to_csv(polyss_path, index=False)
     
     # Generate a subset of the fasta with only the sequences overlaping the 3 sets

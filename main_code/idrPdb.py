@@ -1369,9 +1369,9 @@ def get_dssp_idr(dssp_path, blast_over_path, df_idr_details, basis_path, prefix=
             df_right_2D, ss_map_right = prepare_ss_counts(df_ss, linker_id, "right", "delim", prefix)
             df_2D_idr = pd.merge(df_2D_idr, df_right_2D, how='left', on=linker_id)
             
-            map_50aa = np.hstack([ss_map_left, ss_map_right])
-            map_50aa = map_50aa[pdb_data_ids, :]
-            np.savetxt(basis_path+"map_"+str(delim)+"aa_"+source+".csv", map_50aa, fmt="%d", delimiter=",")
+            map_delim_aa = np.hstack([ss_map_left, ss_map_right])
+            map_delim_aa = map_delim_aa[pdb_data_ids, :]
+            np.savetxt(basis_path+"map_"+str(delim)+"aa_"+source+".csv", map_delim_aa, fmt="%d", delimiter=",")
               
     sel_cols = ['internal_id', prefix+'_name', 'ss_final_over_sz', 'tot_polar_pdb','tot_non_polar_pdb',
                 prefix+'_pdb_rel_start', prefix+'_pdb_rel_end', 

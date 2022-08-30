@@ -185,6 +185,7 @@ if (int(num_sel)==2 or int(num_sel)==3):
         
     cutoff=.6
     min_size=4
+    delim=50
     
 
     tab_poly = input("Provide the path for the Poly tab file. \nIt must be available in the directory provided before and start with the Uniprot proteome ID:  ")   
@@ -208,13 +209,21 @@ if (int(num_sel)==2 or int(num_sel)==3):
     assert(change_cut.isnumeric()), "Value must be 0 or 1!"
     assert(int(change_cut)==0 or int(change_cut)==1), "Value must be 0 or 1!"
     
+    change_delim = input("The default size for delimiting the region surrounding the poly is 50 residues to the left and to the right, 100 in total.\nDo you want to change it (0:No, 1:Yes)? ")
+    assert(change_delim.isnumeric()), "Value must be 0 or 1!"
+    assert(int(change_delim)==0 or int(change_delim)==1), "Value must be 0 or 1!"
+    
     if (int(change_cut)==1):
         cutoff = input("Define new accepted fraction (e.g. 0.60): ")
         assert(float(cutoff)>=0.5 and float(cutoff)<=1.0), "Value must be between 0 and 1!"
         min_size = input("Define new accepted minimum of residues (e.g. 4): ")
         assert(min_size.isnumeric()), "Value must be higher than 4!"
         assert(int(min_size)>4), "Value must be higher than 4!"
-    
+        
+    if (int(change_delim)==1):
+        delim = input("Define number of residues to delimit each side of the repeat (e.g. 50): ")
+        assert(delim.isnumeric()), "Value must be higher than 10!"
+        assert(int(delim)>10), "Value must be higher than 10!"
 
     ''' We finally got to the last main step to cross polyX/XYs with IDRs and PDBs.
     The output is a polyX/XY detailed file with extra PDB info and IDR/PDB info. '''
@@ -282,7 +291,7 @@ if (int(num_sel)==2 or int(num_sel)==3):
     poly_details_path = poly.main_poly(path_fasta, tab_poly, idrs_path, source, int(n_aa), float(cutoff), int(min_size))
     print("Poly details ({0}) were saved to disk.".format(os.path.basename(poly_details_path)))
     
-    poly_all_path, polyss_path = poly.main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, file_names, path_coords, path_fasta, source, float(cutoff), int(min_size))
+    poly_all_path, polyss_path = poly.main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, file_names, path_coords, path_fasta, source, float(cutoff), int(min_size), int(delim))
     print("Poly details ({0}) and Poly 2D data were saved to disk.\n\nENJOY!!!".format(os.path.basename(poly_all_path), os.path.basename(polyss_path)))
     
     end_time = time.time()
