@@ -212,7 +212,7 @@ def extract_poly_idr(idrcsv_path, df_poly, cutoff=.6, min_size=6):
     # Duplication of poly_name can be caused by multiple IDR annotations.
     # Adding an extra ID based on poly_name to solve this problem.
     df_poly_new["poly_idx"] = df_poly_new.groupby('poly_name').cumcount()+1
-    df_poly_new["poly_name"] = df_poly_new["poly_name"] + "_" + polyXY_data["poly_idx"].astype(str)
+    df_poly_new["poly_name"] = df_poly_new["poly_name"] + "_" + df_poly_new["poly_idx"].astype(str)
     df_poly_new = df_poly_new.drop('poly_idx', axis=1)
     
     return df_poly_new
@@ -335,7 +335,7 @@ def main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, fil
     poly_all_path = "data_all_"+source+".csv"
     _ = cross.mark_no_homologs(basis_path, df_poly_details, poly_all_path)
     df_pdb_coords = pd.read_csv(path_coords)
-    cross.correct_pdb_coords(df_pdb_coords, df_poly_details, poly_all_path, "poly")
+    cross.correct_pdb_coords(df_pdb_coords, df_poly_details, basis_path+poly_all_path, "poly")
     
     if (source=="polyxy"):
         df_2D_details = final_2Ddata(df_poly_details, df_2D_details)
