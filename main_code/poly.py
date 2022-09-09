@@ -334,6 +334,7 @@ def main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, fil
     df_poly_details, df_2D_details, _ = cross.get_dssp_idr(dssp_path, basis_path+file_names[-1]+".pickle", df_poly_details, basis_path, "poly", delim, source)
     poly_all_path = "data_all_"+source+".csv"
     _ = cross.mark_no_homologs(basis_path, df_poly_details, poly_all_path)
+    print(path_coords)
     df_pdb_coords = pd.read_csv(path_coords)
     cross.correct_pdb_coords(df_pdb_coords, df_poly_details, basis_path+poly_all_path, "poly")
     

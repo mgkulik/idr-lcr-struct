@@ -185,6 +185,7 @@ def get_another_data(df_idr, pdb_path, idx_million, ids_pos=(0,1,2,5,6,4,10,11,1
         seqs_blast = np.empty((sz,4), dtype=object)
     i,k,l,m = 0,0,0,0
     IDR_old=''
+    mode = 'ab'
     start_time = time.time()
     with open(pdb_path, 'rb') as handle:
         while 1:
@@ -224,7 +225,6 @@ def get_another_data(df_idr, pdb_path, idx_million, ids_pos=(0,1,2,5,6,4,10,11,1
                         if ((i>0)&(i%pickle_sz==0)):
                             #if (i==(pickle_sz*2)):
                             #    break
-                            mode = 'ab'
                             resources.save_pickle(evalues, resources.gen_filename(pdb_path, file_names[0], "", "pickle"), mode)
                             resources.save_pickle(idr_sizes, resources.gen_filename(pdb_path, file_names[1], "", "pickle"), mode)
                             resources.save_pickle(un_ids, resources.gen_filename(pdb_path, file_names[2], "", "pickle"), mode)
@@ -1154,6 +1154,8 @@ def calc_hamming_distance(string1, string2):
     ''' Calculate the hamming distance of the target region. '''
     distance = 0
     L = len(string1)
+    print(string1)
+    print(string2+"\n")
     for i in range(L):
         if string1[i] != string2[i]:
             distance += 1
@@ -1213,31 +1215,22 @@ def prepare_ss_counts(df_ss, linker_id, dir_name="", cut="", prefix="idr"):
         ss_counts, ss_props, _  = count_dssp(idr_ss)
         ss_map=np.empty([1,1])
     
-    df_ss["str1"] = df_ss[cols[3]].str.replace(r'\D+', "", regex=True)
-    df_ss["str2"] = df_ss[cols[2]].str.replace(r'\D+', "", regex=True)
-    df_ss["hamm_dist"] = df_ss.apply(lambda x: calc_hamming_distance(x["str1"], x["str2"]) if len(x["str1"])>0 else np.nan, axis=1)
-    df_ss['sum_of_pairs'] = df_ss.apply(lambda x: sum(calc_sum_of_pairs(x["str1"], x["str2"], blosum, -5, -1)) if len(x["str1"])>0 else np.nan, axis=1)
-    
     # Merging the counts to add to the main dataframe
     ids_idrs = df_ss[linker_id].values
     ss_region = df_ss.iloc[:, 1].values
     pdb_region = df_ss.iloc[:, 2].values
     seq_region = df_ss.iloc[:, 3].values
-    hamm_vals = df_ss.iloc[:, 6].values
-    sop_vals = df_ss.iloc[:, 7].values
-    cols = [linker_id, prefix+'_seq'+cut+dir_name, prefix+'_pdb'+cut+dir_name, 
-            prefix+'_ss'+cut+dir_name, prefix+'_hammDist'+cut+dir_name, prefix+'_sumOfPairs'+cut+dir_name,
+    cols = [linker_id, prefix+'_seq'+cut+dir_name, prefix+'_pdb'+cut+dir_name, prefix+'_ss'+cut+dir_name, 
             'cnt_helix'+cut+dir_name, 'cnt_sheet'+cut+dir_name, 'cnt_coil'+cut+dir_name, 
             'cnt_unmodeled'+cut+dir_name, 'cnt_unfolded'+cut+dir_name, 
             'cnt_gaps'+cut+dir_name, 'prop_helix'+cut+dir_name, 'prop_sheet'+cut+dir_name, 
             'prop_coil'+cut+dir_name, 'prop_unmodeled'+cut+dir_name, 
             'prop_unfolded'+cut+dir_name, 'prop_gaps'+cut+dir_name]
     if (cut=='_delim'):
-        cols.insert(12, 'cnt_noStruct'+cut+dir_name)
+        cols.insert(10, 'cnt_noStruct'+cut+dir_name)
         cols.append('prop_noStruct'+cut+dir_name)
     df_dist2D = pd.DataFrame(np.hstack((ids_idrs[:,None], seq_region[:,None], 
                                         pdb_region[:,None], ss_region[:,None],
-                                        hamm_vals[:,None], sop_vals[:,None], 
                                         ss_counts, ss_props)), columns=cols)
     df_dist2D = df_dist2D.astype({'cnt_helix'+cut+dir_name: 'int32', 
                                   'cnt_sheet'+cut+dir_name: 'int32',
