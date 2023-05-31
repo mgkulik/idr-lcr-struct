@@ -81,7 +81,7 @@ if int(num_sel)==0:
         
     if not "pdb_det_path" in locals_var:
         message = "No PDB details file located in the pdb folder.\nPlease confirm it, otherwise the step to extract extra information from PDB files can take up to an hour."
-        pdb_det_path = resources.get_pdbOut_names(pdb_files, '_pdb_details.csv.csv', message)
+        pdb_det_path = resources.get_pdbOut_names(pdb_files, '_pdb_details.csv', message)
 
 
 if int(num_sel)==1:
@@ -101,9 +101,11 @@ if int(num_sel)==1:
     if int(mobidb_key)==0:
         key = "prediction-disorder-mobidb_lite"
         name = "mobidb"
+        group = 'lite'
     else:
         key = "prediction-disorder-th_50"
-        name = "consensus"
+        name = ""
+        group = 'th_50'
     
     """ Here your output will be a csv file with several extractions and 
     calculations of IDR properties and a reduced fasta containing only the
@@ -119,7 +121,7 @@ if int(num_sel)==1:
             path_fasta = input("Provide the path for the proteome fasta. \nIt must be available in the directory provided before and start with the Uniprot proteome ID: ")
             path_fasta = resources.valid_file(path_fasta, comp_path_un)
         if not "tab_idr" in locals_var:
-            tab_idr = os.path.join(comp_path_un, un_prot+"_mobidb_idr.tab")
+            tab_idr = os.path.join(comp_path_un, un_prot+"_mobidb_"+group+".tab")
         
 
 if (int(num_sel)==2 or int(num_sel)==3):
@@ -256,11 +258,8 @@ if (int(num_sel)==2 or int(num_sel)==3):
 if int(num_sel)==1:
 
     start_time = time.time()
-    
-    tab_idr = idr.extract_json(path1, key, name)
-    print("\nTab file {0} with MobiDB predictions was saved to disk.".format(os.path.basename(tab_idr)))
    
-    idrs_path, idr_fasta_path = idr.run_all(path_fasta, tab_idr)
+    idrs_path, idr_fasta_path = idr.run_all(path_fasta, tab_idr, path1, group)
     print("\nFiltered fasta ({0}) and IDR details ({1}) were saved to disk.".format(os.path.basename(idr_fasta_path), os.path.basename(idrs_path)))
     
     print("\nThe files you need for BlastP are ready! Generate your blast XML file and come back.\nWe'll optimize our time by running another step now...\n\n\nDON'T FORGET TO RUN YOUR BLASTP.")

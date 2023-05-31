@@ -155,6 +155,18 @@ def get_poly_cat(col1):
     return poly_cat
 
 
+def count_top_contiguous(seq_aas):
+    ''' Count the largest contiguous'''
+    groups = sorted([list(g) for f, g in groupby(seq_aas)],key=len)
+    last_group = groups[-1]
+    before_group = groups[-2]
+    if (len(last_group)==len(before_group)):
+        res = "Equal"
+    else:
+        res = last_group[0]
+    return pd.Series((res, len(last_group)))
+
+
 # df_poly_details = df_poly_details.drop(['poly_pairs', 'poly_pairs1', 'poly_pairs2', 'poly_pairs1_int', 'poly_pairs2_int', 'poly_mask', 'poly_patt', 'poly_cat'], axis=1)
 def generate_poly_groups(df_poly_details):
     ''' Prepare and add the categories of poly to dataframe. '''
@@ -166,6 +178,7 @@ def generate_poly_groups(df_poly_details):
     df_poly_details['poly_patt'] = df_poly_details.apply(lambda x: get_poly_patt(x.poly_mask), axis=1)
     df_poly_details['poly_cat'] = df_poly_details.apply(lambda x: get_poly_cat(x.poly_patt), axis=1)
     df_poly_details[['cnt_pair1','cnt_pair2']] = df_poly_details.apply(lambda x: get_align_aa_counts(x['poly_aa'], x['poly_pairs1'], x['poly_pairs2']), axis=1)
+    df_poly_details[['poly_long_aa','poly_long_cnt']] = df_poly_details.apply(lambda x: count_top_contiguous(x['poly_aa']), axis=1)
     return df_poly_details
 
 
