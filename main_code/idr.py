@@ -31,7 +31,7 @@ def get_entry_info(vals, name):
         pred_score = vals['scores']
     return regions, pred_score
 
-def extract_json(filename, key, name):
+def extract_json(filename, key, name, group, fasta_data):
     ''' Reads the json proteome downloaded from mobidb, extract IDR predictions
     based on the consensus data and save a simple tab separated file to disk. '''
     
@@ -44,23 +44,26 @@ def extract_json(filename, key, name):
     # The organism file presents only the consensus data ...
     dt_mobi = list()
     for a in range(len(json_data)):
-        if (key in json_data[a]):
-            seq_acc = json_data[a]['acc']
+        seq_acc = json_data[a]['acc']
+        # Checking if the sequence is the same
+        if seq_acc in fasta_data:
             seq_vals = json_data[a]['sequence']
-            uniref100 = json_data[a]['uniref100']
-            uniref90 = json_data[a]['uniref90']
-            uniref50 = json_data[a]['uniref50']
-            mobidb_vals = json_data[a][key]
-            mobi_lst = ""
-            reg_data, scores = get_entry_info(mobidb_vals, name)
-            if name=="mobidb":
-                scores = ','.join([str(i) for i in scores])
-            mobi_lst = seq_acc+sep+uniref100+sep+uniref90+sep+uniref50+sep+scores 
-            for k in range(len(reg_data)):
-                mobi_lst += sep+str(reg_data[k][0])+"-"+str(reg_data[k][1])
-            dt_mobi.append(mobi_lst+"\n")
+            # Checking if the sequence has this type of prediction
+            if (key in json_data[a]):
+                uniref100 = json_data[a]['uniref100']
+                uniref90 = json_data[a]['uniref90']
+                uniref50 = json_data[a]['uniref50']
+                mobidb_vals = json_data[a][key]
+                mobi_lst = ""
+                reg_data, scores = get_entry_info(mobidb_vals, name)
+                if name=="mobidb":
+                    scores = ','.join([str(i) for i in scores])
+                mobi_lst = seq_acc+sep+uniref100+sep+uniref90+sep+uniref50+sep+scores 
+                for k in range(len(reg_data)):
+                    mobi_lst += sep+str(reg_data[k][0])+"-"+str(reg_data[k][1])
+                dt_mobi.append(mobi_lst+"\n")
     
-    new_name = resources.gen_filename(filename, "mobidb", "idr", "tab")
+    new_name = resources.gen_filename(filename, "mobidb", group, "tab")
     resources.save_file(dt_mobi, new_name, "w")
     return (new_name)
     
@@ -280,12 +283,16 @@ def get_cider_props(idr_details_path, prefix):
     print("\n--- Total cider time: %s seconds ---" % (tot_in_sec))
 
 
-def run_all(fastaname, tabidr_path, use_toolscores=False):
+def run_all(path_fasta, tab_idr, group, path1, use_toolscores=False):
 
     idr_min_sz=20
-    fasta_data, seq_count_group, tot_lens = resources.read_fasta(fastaname)
-    error_path = resources.gen_filename(tabidr_path, "mobidb", "idr", "err")
-    seq_lst, seq_idr_lens, idrs_info, error_lst = extract_idrs(tabidr_path, fasta_data, error_path)
+    fasta_data, seq_count_group, tot_lens = resources.read_fasta(path_fasta)
+    
+    tab_idr = idr.extract_json(path1, key, name, group, fasta_data)
+    print("\nTab file {0} with MobiDB predictions was saved to disk.".format(os.path.basename(tab_idr)))
+    
+    error_path = resources.gen_filename(tab_idr, "mobidb", "idr", "err")
+    seq_lst, seq_idr_lens, idrs_info, error_lst = extract_idrs(tab_idr, fasta_data, error_path)
     
     if len(error_lst) > 0:
         print("There are errors, please check the file created on disk.")
@@ -297,14 +304,14 @@ def run_all(fastaname, tabidr_path, use_toolscores=False):
                 'tot_non_polar', 'tot_basic', 'tot_acidic', 'prop_polar', 
                 'prop_non_polar', 'prop_basic', 'prop_acidic', 'idr_1st_cat', 
                 'idr_2nd_cat', 'idr_tops_diff', 'idr_tops_diff_prop', 'idr_gp_variance']
-    idrs_path = resources.gen_filename(tabidr_path, "mobidb", "idr_details", "csv")
+    idrs_path = resources.gen_filename(tab_idr, "mobidb", "idr_details", "csv")
     pd_idrs = generate_df_idrs(colnames, idrs_info, idrs_path, idr_min_sz)
         
     if use_toolscores:
         # We end up not using this. The idea was to change the consensus percentage
         # and evaluate the curve compared to the confirmed IDRs.
         tsh=.6
-        tabidr_path60 = get_score2regions(pd_idrs, tabidr_path, tsh)
+        tabidr_path60 = get_score2regions(pd_idrs, tab_idr, tsh)
         source = os.path.basename(tabidr_path60).split('_')[0]+"_"
         _, _, idrs_info60, _ = extract_idrs(tabidr_path60, fasta_data, source, max_len)
         idrs_path60 = idrs_path.replace(".csv", set_threshold_str(tsh)+".csv")

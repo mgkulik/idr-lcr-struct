@@ -81,7 +81,7 @@ if int(num_sel)==0:
         
     if not "pdb_det_path" in locals_var:
         message = "No PDB details file located in the pdb folder.\nPlease confirm it, otherwise the step to extract extra information from PDB files can take up to an hour."
-        pdb_det_path = resources.get_pdbOut_names(pdb_files, '_pdb_details.csv.csv', message)
+        pdb_det_path = resources.get_pdbOut_names(pdb_files, '_pdb_details.csv', message)
 
 
 if int(num_sel)==1:
@@ -101,9 +101,11 @@ if int(num_sel)==1:
     if int(mobidb_key)==0:
         key = "prediction-disorder-mobidb_lite"
         name = "mobidb"
+        group = 'lite'
     else:
         key = "prediction-disorder-th_50"
-        name = "consensus"
+        name = ""
+        group = 'th_50'
     
     """ Here your output will be a csv file with several extractions and 
     calculations of IDR properties and a reduced fasta containing only the
@@ -119,7 +121,7 @@ if int(num_sel)==1:
             path_fasta = input("Provide the path for the proteome fasta. \nIt must be available in the directory provided before and start with the Uniprot proteome ID: ")
             path_fasta = resources.valid_file(path_fasta, comp_path_un)
         if not "tab_idr" in locals_var:
-            tab_idr = os.path.join(comp_path_un, un_prot+"_mobidb_idr.tab")
+            tab_idr = os.path.join(comp_path_un, un_prot+"_mobidb_"+group+".tab")
         
 
 if (int(num_sel)==2 or int(num_sel)==3):
@@ -185,6 +187,7 @@ if (int(num_sel)==2 or int(num_sel)==3):
         
     cutoff=.6
     min_size=4
+    delim=50
     
 
     tab_poly = input("Provide the path for the Poly tab file. \nIt must be available in the directory provided before and start with the Uniprot proteome ID:  ")   
@@ -208,13 +211,21 @@ if (int(num_sel)==2 or int(num_sel)==3):
     assert(change_cut.isnumeric()), "Value must be 0 or 1!"
     assert(int(change_cut)==0 or int(change_cut)==1), "Value must be 0 or 1!"
     
+    change_delim = input("The default size for delimiting the region surrounding the poly is 50 residues to the left and to the right, 100 in total.\nDo you want to change it (0:No, 1:Yes)? ")
+    assert(change_delim.isnumeric()), "Value must be 0 or 1!"
+    assert(int(change_delim)==0 or int(change_delim)==1), "Value must be 0 or 1!"
+    
     if (int(change_cut)==1):
         cutoff = input("Define new accepted fraction (e.g. 0.60): ")
         assert(float(cutoff)>=0.5 and float(cutoff)<=1.0), "Value must be between 0 and 1!"
         min_size = input("Define new accepted minimum of residues (e.g. 4): ")
         assert(min_size.isnumeric()), "Value must be higher than 4!"
         assert(int(min_size)>4), "Value must be higher than 4!"
-    
+        
+    if (int(change_delim)==1):
+        delim = input("Define number of residues to delimit each side of the repeat (e.g. 50): ")
+        assert(delim.isnumeric()), "Value must be higher than 10!"
+        assert(int(delim)>10), "Value must be higher than 10!"
 
     ''' We finally got to the last main step to cross polyX/XYs with IDRs and PDBs.
     The output is a polyX/XY detailed file with extra PDB info and IDR/PDB info. '''
@@ -247,11 +258,8 @@ if (int(num_sel)==2 or int(num_sel)==3):
 if int(num_sel)==1:
 
     start_time = time.time()
-    
-    tab_idr = idr.extract_json(path1, key, name)
-    print("\nTab file {0} with MobiDB predictions was saved to disk.".format(os.path.basename(tab_idr)))
    
-    idrs_path, idr_fasta_path = idr.run_all(path_fasta, tab_idr)
+    idrs_path, idr_fasta_path = idr.run_all(path_fasta, tab_idr, path1, group)
     print("\nFiltered fasta ({0}) and IDR details ({1}) were saved to disk.".format(os.path.basename(idr_fasta_path), os.path.basename(idrs_path)))
     
     print("\nThe files you need for BlastP are ready! Generate your blast XML file and come back.\nWe'll optimize our time by running another step now...\n\n\nDON'T FORGET TO RUN YOUR BLASTP.")
@@ -282,7 +290,7 @@ if (int(num_sel)==2 or int(num_sel)==3):
     poly_details_path = poly.main_poly(path_fasta, tab_poly, idrs_path, source, int(n_aa), float(cutoff), int(min_size))
     print("Poly details ({0}) were saved to disk.".format(os.path.basename(poly_details_path)))
     
-    poly_all_path, polyss_path = poly.main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, file_names, path_coords, path_fasta, source, float(cutoff), int(min_size))
+    poly_all_path, polyss_path = poly.main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, file_names, path_coords, path_fasta, source, float(cutoff), int(min_size), int(delim))
     print("Poly details ({0}) and Poly 2D data were saved to disk.\n\nENJOY!!!".format(os.path.basename(poly_all_path), os.path.basename(polyss_path)))
     
     end_time = time.time()

@@ -99,6 +99,11 @@ def select_target(path_selected, un_pdb_ids, file_type_name="", intersect=True, 
     pattern = r'\W*'+file_type_name+'.gz'
     files = sorted([f.path for f in os.scandir(path_selected) if (re.search(pattern, f.path))])
     base_files = [os.path.splitext(os.path.splitext(os.path.basename(f))[0])[0] for f in files]
+    # Remove duplicates when both cif and pdb are in the file, keeping the .cif
+    _, check_dup = np.unique(base_files, return_index=True)
+    files = [files[i] for i in check_dup]
+    base_files = [base_files[i] for i in check_dup]
+    
     sel_files = []
     if (intersect):
         for x, y in zip(base_files, files):
@@ -762,7 +767,7 @@ def main_files(path_pdb):
     resources.save_sep_file(missing_ids, file_name)
     missing = manage_missing(path_pdb_files, missing_ids)
     if len(missing)>0:
-        file_name = os.path.join(path_pdb, date_start+"_sitll_missing_pdbs_list.txt")
+        file_name = os.path.join(path_pdb, date_start+"_still_missing_pdbs_list.txt")
         resources.save_sep_file(missing, file_name)
         print("ATENTION: There are still some PDB/CIF files we were not able to download.\nCheck the file _sitll_missing_pdbs_list.txt and try to download them manually.\nWe will move on now considering the files available on disk!")
 
@@ -772,7 +777,7 @@ def main_dssp(path_pdb, path_ss_file, path_pdb_files, path_seqres):
     seqres_data, seqres_keys, seqres_desc, seqres_fnb = extract_seqres(path_seqres)
     missing_names, missing_ids, obsolete_names = get_missing_names(seqres_keys, path_masked)
     
-    date_start = os.path.basename(path_ss_file).split("_")[0]
+    date_start = os.path.basename(path_seqres).split("_")[0]
     
     # Dealing with the new file now. We remove the obsolete first and in the 
     # same function create the new file.
@@ -795,10 +800,8 @@ def main_dssp(path_pdb, path_ss_file, path_pdb_files, path_seqres):
         # Extracting essential info from the PDB files (type, resolution, interactions?)
         # _, ss_keys, _, _ = resources.extract_ss(path_ss_final)
         # sel_ids = np.unique([ids.split("_")[0] for ids in ss_keys]).tolist()  # Run this if you want to take all ids from 2D structure file
-        df_pdb_details = extract_from_pdb_file(path_pdb_files, path_pdb, date_start, sel_ids, "")
+        # sel_ids = missing_ids.copy()
+        # det_old_path = ""
+        #df_pdb_details = extract_from_pdb_file(path_pdb_files, path_pdb, date_start, sel_ids, det_old_path)
         
-
-    
-   
-    
-    
+        

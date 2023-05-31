@@ -83,8 +83,10 @@ def extract_polyXY_features(polyXY_path, fasta_data, tp=2):
                     poly_part2_tp = resources.get_aa_type(poly_part2)
                 if (poly_part1_tp==poly_part2_tp):
                     poly_pair_tp = poly_part1_tp
+                elif ("Polar" in poly_part1_tp and "Polar" in poly_part2_tp):
+                    poly_pair_tp = "Polar Mixed charges"
                 else:
-                    poly_pair_tp = "Both"
+                    poly_pair_tp = "Polar / Non-Polar"
                 poly_aa = rowsplit[4]
             else:
                 poly_part2=""
@@ -153,6 +155,18 @@ def get_poly_cat(col1):
     return poly_cat
 
 
+def count_top_contiguous(seq_aas):
+    ''' Count the largest contiguous'''
+    groups = sorted([list(g) for f, g in groupby(seq_aas)],key=len)
+    last_group = groups[-1]
+    before_group = groups[-2]
+    if (len(last_group)==len(before_group)):
+        res = "Equal"
+    else:
+        res = last_group[0]
+    return pd.Series((res, len(last_group)))
+
+
 # df_poly_details = df_poly_details.drop(['poly_pairs', 'poly_pairs1', 'poly_pairs2', 'poly_pairs1_int', 'poly_pairs2_int', 'poly_mask', 'poly_patt', 'poly_cat'], axis=1)
 def generate_poly_groups(df_poly_details):
     ''' Prepare and add the categories of poly to dataframe. '''
@@ -164,6 +178,7 @@ def generate_poly_groups(df_poly_details):
     df_poly_details['poly_patt'] = df_poly_details.apply(lambda x: get_poly_patt(x.poly_mask), axis=1)
     df_poly_details['poly_cat'] = df_poly_details.apply(lambda x: get_poly_cat(x.poly_patt), axis=1)
     df_poly_details[['cnt_pair1','cnt_pair2']] = df_poly_details.apply(lambda x: get_align_aa_counts(x['poly_aa'], x['poly_pairs1'], x['poly_pairs2']), axis=1)
+    df_poly_details[['poly_long_aa','poly_long_cnt']] = df_poly_details.apply(lambda x: count_top_contiguous(x['poly_aa']), axis=1)
     return df_poly_details
 
 
@@ -172,7 +187,9 @@ def extract_poly_idr(idrcsv_path, df_poly, cutoff=.6, min_size=6):
     ''' Add the information of all IDRs to the poly annotations. '''
 
     df_idr_details = pd.read_csv(idrcsv_path)
-    idrs_pos = df_idr_details.loc[:, ['seq_name', 'idr_name', 'idr_size', 'idr_start', 'idr_end']]
+    idrs_pos = df_idr_details.loc[:, ['seq_name', 'idr_name', 'uniref100', 
+                                      'uniref90', 'uniref50', 'idr_size', 
+                                      'idr_start', 'idr_end']]
     merged_pos = pd.merge(df_poly, idrs_pos, how="left", on="seq_name")
     merged_pos = merged_pos.sort_values(by=['idr_name', 'poly_name'])
     # Here instead of using the IDR real start and ends I use the ones calculated
@@ -205,6 +222,11 @@ def extract_poly_idr(idrcsv_path, df_poly, cutoff=.6, min_size=6):
     IDs_seq = pd.unique(merged_pos.loc[long_bool, 'poly_name']).tolist()
     df_poly_notSel = df_poly.loc[~df_poly['poly_name'].isin(IDs_seq), :]
     df_poly_new = pd.concat([merged_sel, df_poly_notSel])
+    # Duplication of poly_name can be caused by multiple IDR annotations.
+    # Adding an extra ID based on poly_name to solve this problem.
+    df_poly_new["poly_idx"] = df_poly_new.groupby('poly_name').cumcount()+1
+    df_poly_new["poly_name"] = df_poly_new["poly_name"] + "_" + df_poly_new["poly_idx"].astype(str)
+    df_poly_new = df_poly_new.drop('poly_idx', axis=1)
     
     return df_poly_new
 
@@ -306,7 +328,7 @@ def main_poly(seqs_path, polyXY_path, idrcsv_path, source, n_aa, cutoff, min_siz
 
 
 ### MAIN IDR POLY SESSION
-def main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, file_names, path_coords, path_fasta, source, cutoff, min_size):
+def main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, file_names, path_coords, path_fasta, source, cutoff, min_size, delim):
     ''' Now crossing Poly with PDBs. '''
     
     basis_path = resources.get_dir(idr_all_path)+"/"+resources.get_filename(idr_all_path)+"_"
@@ -322,15 +344,16 @@ def main_poly_pdb(idr_all_path, poly_details_path, pdb_mask_path, dssp_path, fil
     # get the details of the PDB and SEQ alignment
     df_poly_details = cross.append_pdb_details(pdb_mask_path, df_poly_details)
     # Now we can calculate the PolyXY ss_region using the same functions. The filtering step is not required
-    df_poly_details, df_2D_details, _ = cross.get_dssp_idr(dssp_path, basis_path+file_names[-1]+".pickle", df_poly_details, basis_path, "poly", 50, source)
+    df_poly_details, df_2D_details, _ = cross.get_dssp_idr(dssp_path, basis_path+file_names[-1]+".pickle", df_poly_details, basis_path, "poly", delim, source)
     poly_all_path = "data_all_"+source+".csv"
     _ = cross.mark_no_homologs(basis_path, df_poly_details, poly_all_path)
+    print(path_coords)
     df_pdb_coords = pd.read_csv(path_coords)
-    cross.correct_pdb_coords(df_pdb_coords, df_poly_details, poly_all_path, "poly")
+    cross.correct_pdb_coords(df_pdb_coords, df_poly_details, basis_path+poly_all_path, "poly")
     
     if (source=="polyxy"):
         df_2D_details = final_2Ddata(df_poly_details, df_2D_details)
-    polyss_path = basis_path+"data_ss_"+source+".csv"
+    polyss_path = basis_path+"data_ss"+str(delim)+"_"+source+".csv"
     df_2D_details.to_csv(polyss_path, index=False)
     
     # Generate a subset of the fasta with only the sequences overlaping the 3 sets
