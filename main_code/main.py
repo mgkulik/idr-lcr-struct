@@ -259,7 +259,7 @@ if int(num_sel)==1:
 
     start_time = time.time()
    
-    idrs_path, idr_fasta_path = idr.run_all(path_fasta, tab_idr, path1, group)
+    idrs_path, idr_fasta_path = idr.run_all(path_fasta, tab_idr, path1, key, name, group)
     print("\nFiltered fasta ({0}) and IDR details ({1}) were saved to disk.".format(os.path.basename(idr_fasta_path), os.path.basename(idrs_path)))
     
     print("\nThe files you need for BlastP are ready! Generate your blast XML file and come back.\nWe'll optimize our time by running another step now...\n\n\nDON'T FORGET TO RUN YOUR BLASTP.")

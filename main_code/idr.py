@@ -283,15 +283,15 @@ def get_cider_props(idr_details_path, prefix):
     print("\n--- Total cider time: %s seconds ---" % (tot_in_sec))
 
 
-def run_all(path_fasta, tab_idr, group, path1, use_toolscores=False):
+def run_all(path_fasta, tab_idr, path1, key, name, group, use_toolscores=False):
 
     idr_min_sz=20
     fasta_data, seq_count_group, tot_lens = resources.read_fasta(path_fasta)
     
-    tab_idr = idr.extract_json(path1, key, name, group, fasta_data)
+    tab_idr = extract_json(path1, key, name, group, fasta_data)
     print("\nTab file {0} with MobiDB predictions was saved to disk.".format(os.path.basename(tab_idr)))
     
-    error_path = resources.gen_filename(tab_idr, "mobidb", "idr", "err")
+    error_path = resources.gen_filename(tab_idr, "mobidb", group, "err")
     seq_lst, seq_idr_lens, idrs_info, error_lst = extract_idrs(tab_idr, fasta_data, error_path)
     
     if len(error_lst) > 0:
@@ -304,7 +304,7 @@ def run_all(path_fasta, tab_idr, group, path1, use_toolscores=False):
                 'tot_non_polar', 'tot_basic', 'tot_acidic', 'prop_polar', 
                 'prop_non_polar', 'prop_basic', 'prop_acidic', 'idr_1st_cat', 
                 'idr_2nd_cat', 'idr_tops_diff', 'idr_tops_diff_prop', 'idr_gp_variance']
-    idrs_path = resources.gen_filename(tab_idr, "mobidb", "idr_details", "csv")
+    idrs_path = resources.gen_filename(tab_idr, "mobidb", group+"_details", "csv")
     pd_idrs = generate_df_idrs(colnames, idrs_info, idrs_path, idr_min_sz)
         
     if use_toolscores:
@@ -318,7 +318,7 @@ def run_all(path_fasta, tab_idr, group, path1, use_toolscores=False):
         pd_idrs60 = generate_df_idrs(colnames, idrs_info60, idrs_path60, idr_min_sz)
         
 
-    fastaout = resources.gen_filename(tabidr_path, "mobidb", "idr", "fasta")
+    fastaout = resources.gen_filename(tab_idr, "mobidb", group, "fasta")
     resources.save_fastas(seq_lst, fastaout)
     #idx_idrs_max = np.argsort(-np.array(idrs_max))
      
