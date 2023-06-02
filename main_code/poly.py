@@ -178,7 +178,7 @@ def generate_poly_groups(df_poly_details):
     df_poly_details['poly_patt'] = df_poly_details.apply(lambda x: get_poly_patt(x.poly_mask), axis=1)
     df_poly_details['poly_cat'] = df_poly_details.apply(lambda x: get_poly_cat(x.poly_patt), axis=1)
     df_poly_details[['cnt_pair1','cnt_pair2']] = df_poly_details.apply(lambda x: get_align_aa_counts(x['poly_aa'], x['poly_pairs1'], x['poly_pairs2']), axis=1)
-    df_poly_details[['poly_long_aa','poly_long_cnt']] = df_poly_details.apply(lambda x: count_top_contiguous(x['poly_aa']), axis=1)
+    #df_poly_details[['poly_long_aa','poly_long_cnt']] = df_poly_details.apply(lambda x: count_top_contiguous(x['poly_aa']), axis=1)
     return df_poly_details
 
 
