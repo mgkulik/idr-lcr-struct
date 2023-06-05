@@ -257,22 +257,22 @@ def read_fasta_ss(path_ss):
             yield comp_seq, header
 
 
-def extract_ss(path_ss, sep="_", s_type="pdb"):
+def extract_ss(path_ss, sep="_", s_type="pdb", spl=":"):
     """Read the fasta file special for the secondary structure cases.
     Here we have 1 entry with the sequence (sequence) and 1 with the secondary
     structure labels (secstr).
        **PS: Decided not to use the SeqIO function because it deletes the
        white spaces from the dssp structures. """
-    ss_data = dict()
-    ss_seq = dict()
+    ss_data, ss_seq, ss_coords = dict(), dict(), dict()
     ss_keys = list()
-    ss_coords = dict()
     for v, k in read_fasta_ss(path_ss):
-        ss_comp = k.split(':')
+        ss_comp = k.split(spl)
         ss_type = ss_comp[2]
         ss_name = ss_comp[0]
-        if (s_type=="pdb"):
+        if (s_type=="pdb" or s_type=="af"):
             ss_name+=sep+ss_comp[1]
+        else:
+            ss_name=ss_comp[1]
         if (ss_type == 'secstr\n') or (ss_type == 'secstr'):
             ss_data[ss_name] = v
             ss_keys.append(ss_name)
