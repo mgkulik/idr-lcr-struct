@@ -22,11 +22,16 @@ import gzip, shutil, os, csv, pickle, shutil, time, tarfile
 
 from datetime import datetime
 
+import resources
+
 #/home/magoncal/Documents/data/projects/idr_cook/
 #basis_path = input("BE CAREFULL!! Set the complete path to the folder of the BASE files: ")
+comp_path = '/home/magoncal/Documents/data/projects/poly_cook/'
+un_prot = 'UP000005640'
+comp_path_un = os.path.join(comp_path, un_prot)
 path_fasta = os.path.join(comp_path_un, un_prot+'_mobidb_lite.fasta')
 #path_ids = basis_path+'uniprots_final_dataset'
-path_selected = '/home/magoncal/Documents/data/projects/poly_cook/UP000005640/'
+#path_selected = '/home/magoncal/Documents/data/projects/poly_cook/UP000005640/'
 
 
 def get_ss_string(chain_part, base, seqres_data, fold_id):
@@ -125,24 +130,25 @@ def gen_str_row(base, plddt):
     return(base + '\t' + ', '.join(list(plddt)))
 
 
-def extract_selected(comp_path_un, seq_selected, ptype="cif"):
+def extract_selected(comp_path_un, fasta_selected, ptype="cif"):
     tar_path = [(f.path, f.name) for f in os.scandir(comp_path_un) if f.name.endswith('.tar')][0]
     # It always create a folder inside another. Managing this
     cif_path = tar_path[0][:-4]
     cif_subpath = os.path.join(cif_path, tar_path[1][:-4])
     
     files_tar = tarfile.open(tar_path[0], 'r')
-    for member in files_tar.getmembers():
-        for prot_name in seq_selected:
+    for prot_name in fasta_selected.keys():
+        for member in files_tar.getmembers():
             if prot_name in member.name:
                 files_tar.extract(member, cif_path)
+                break
     return cif_subpath, cif_path, os.listdir(cif_subpath)
 
 
-def annotate_ss(comp_path_un, seq_selected, ptype="cif", dssp=True):
-    error_lst = []
+def annotate_ss(comp_path_un, fasta_selected, ptype="cif", dssp=True):
+    ss_lst, error_lst, plddt_lst = list(), list(), list()
     # Keeping just the file names I need from the alignment with IDRs
-    cif_subpath, cif_path, sel_files = extract_selected(comp_path_un, seq_selected, ptype)
+    cif_subpath, cif_path, sel_files = extract_selected(comp_path_un, fasta_selected, ptype)
     sel_files = [os.path.join(cif_subpath, f) for f in sel_files]
     # Sorting list based on the number of the model (now it is considering numbers as char)
     sel_files = sort_files(sel_files)
@@ -161,7 +167,7 @@ def annotate_ss(comp_path_un, seq_selected, ptype="cif", dssp=True):
         except Exception as e:
             error_lst.append([base, type(e).__name__+ " - " + str(e.args[0])])
         if dssp:
-            ss_new, error_val = get_dssp_missing(comppath, base, seqres_data, file_name, fold_id)
+            ss_new, error_val = get_dssp_missing(comppath, base, fasta_selected, file_name, fold_id)
             error_lst = error_lst + error_val
             ss_lst = ss_lst + ss_new
         plddt = get_pLDDT_cif(comppath)
@@ -171,7 +177,8 @@ def annotate_ss(comp_path_un, seq_selected, ptype="cif", dssp=True):
         if (i%1000==0):
             print("{0}% processed {1} seconds".format(str(round((i/len(sel_files)*100), 3)), str(time.time() - start_time)))
     try:
-        shutil.rmtree(cif_path)
+        pass
+        #shutil.rmtree(cif_path)
     except OSError as e:
         print("Error: %s : %s" % (temp_path, e.strerror))
     print("{0} seconds".format(time.time() - start_time))
@@ -192,31 +199,16 @@ def append_ss_tofasta(ss_fasta, path_ss, name):
             newfile.write(wrap_line(l[k],75))
 
             
-def select_fasta(path_fasta, base_path, start_name, path_ids="", save=False):
+def select_fasta(path_fasta):
     ''' Reads the fasta file and store the sequences.
-    Step required because alphafold may not have all targets.
-    
     Returns a SeqIO object to use later. '''
-    if path_ids!="":
-        my_file = open(path_ids, "r")
-        uniprot_lst = [l.rstrip("\n") for l in my_file.readlines()]
-        my_file.close()
     
     fasta_lst = []
     fasta_data = dict()
     for seq_record in SeqIO.parse(path_fasta, 'fasta'):
         uniprot_name = seq_record.id.split('|')[1]
-        if path_ids!="":
-            if (uniprot_name in uniprot_lst):
-                fasta_lst.append(seq_record)
-                fasta_data[uniprot_name] = seq_record
-        else:
-            fasta_lst.append(seq_record)
-            fasta_data[uniprot_name] = seq_record
-    
-    if save:
-        name = os.path.join(base_path, start_name+"_alphafold.fasta")
-        resources.save_fastas(fasta_lst, name)
+        fasta_lst.append(seq_record)
+        fasta_data[uniprot_name] = seq_record
     
     return fasta_data
 
@@ -228,18 +220,11 @@ def save_list(path, lst_synt):
     textfile.close()
 
 
-def get_prot_ids(path_fasta):
-    seq_selected = list()
-    for seq_record in SeqIO.parse(path_fasta, 'fasta'):
-        seq_selected.append(seq_record.id.split('|')[1])
-    return seq_selected
-
-
 def run_noselection():
     date_start = datetime.today().strftime('%Y%m%d')
-    seq_selected = get_prot_ids(path_fasta)
-    # test = np.unique(list(fasta_selected.keys())).tolist()[600:700]
-    ss2append, plddts, errors_dssp = annotate_ss(comp_path_un, seq_selected, "cif") #Almost 5hs
+    fasta_selected = select_fasta(path_fasta)
+    #fasta_selected_ori = fasta_selected.copy(); fasta_selected = {k: fasta_selected[k] for k in list(fasta_selected)[:10]}
+    ss2append, plddts, errors_dssp = annotate_ss(comp_path_un, fasta_selected, "cif") #Almost 5hs
     path_ss = basis_path+date_start+'_ss_alphafold.fasta'
     append_ss_tofasta(ss2append, path_ss, "new")
     save_list(basis_path+date_start+"_plddts.tab", plddts)
