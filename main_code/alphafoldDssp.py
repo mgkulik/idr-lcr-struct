@@ -29,7 +29,7 @@ import resources
 comp_path = '/home/magoncal/Documents/data/projects/poly_cook/'
 un_prot = 'UP000005640'
 comp_path_un = os.path.join(comp_path, un_prot)
-path_fasta = os.path.join(comp_path_un, un_prot+'_mobidb_lite.fasta')
+path_fasta = os.path.join(comp_path_un, un_prot+'_9606.fasta')
 #path_ids = basis_path+'uniprots_final_dataset'
 #path_selected = '/home/magoncal/Documents/data/projects/poly_cook/UP000005640/'
 
@@ -131,6 +131,7 @@ def gen_str_row(base, plddt):
 
 
 def extract_selected(comp_path_un, fasta_selected, ptype="cif"):
+    error_lst = []
     tar_path = [(f.path, f.name) for f in os.scandir(comp_path_un) if f.name.endswith('.tar')][0]
     # It always create a folder inside another. Managing this
     cif_path = tar_path[0][:-4]
@@ -138,17 +139,37 @@ def extract_selected(comp_path_un, fasta_selected, ptype="cif"):
     
     files_tar = tarfile.open(tar_path[0], 'r')
     for prot_name in fasta_selected.keys():
+        miss = True
         for member in files_tar.getmembers():
             if prot_name in member.name:
                 files_tar.extract(member, cif_path)
+                miss = False
                 break
-    return cif_subpath, cif_path, os.listdir(cif_subpath)
+        if miss:
+            error_lst.append([prot_name, 'Not available in the AlphaFold tar file.'])
+    return cif_subpath, cif_path, os.listdir(cif_subpath), error_lst
+
+
+def extract_from_tar(comp_path_un, ptype="cif"):
+    tar_path = [(f.path, f.name) for f in os.scandir(comp_path_un) if f.name.endswith('.tar')][0]
+    # It always create a folder inside another. Managing this
+    cif_path = tar_path[0][:-4]
+    cif_subpath = os.path.join(cif_path, tar_path[1][:-4])
+    files_tar = tarfile.open(tar_path[0], 'r')
+    for member in files_tar.getmembers():
+        files_tar.extract(member, cif_path)
+    return cif_subpath, cif_path, np.array(os.listdir(cif_subpath))
 
 
 def annotate_ss(comp_path_un, fasta_selected, ptype="cif", dssp=True):
-    ss_lst, error_lst, plddt_lst = list(), list(), list()
-    # Keeping just the file names I need from the alignment with IDRs
-    cif_subpath, cif_path, sel_files = extract_selected(comp_path_un, fasta_selected, ptype)
+    ss_lst, plddt_lst, error_lst = list(), list(), list()
+    # Dropped the idea of selecting the files because the search is too much time consuming
+    #cif_subpath, cif_path, sel_files, error_lst = extract_selected(comp_path_un, fasta_selected, ptype)
+    # Decided to filter just the ones present in the fastar later
+    cif_subpath, cif_path, sel_files = extract_from_tar(comp_path_un, ptype)
+    base_files = [n.split("-")[1] for n in sel_files]
+    bool_idx = np.isin(base_files, list(fasta_selected.keys()))
+    sel_files = sel_files[bool_idx]
     sel_files = [os.path.join(cif_subpath, f) for f in sel_files]
     # Sorting list based on the number of the model (now it is considering numbers as char)
     sel_files = sort_files(sel_files)
@@ -178,7 +199,7 @@ def annotate_ss(comp_path_un, fasta_selected, ptype="cif", dssp=True):
             print("{0}% processed {1} seconds".format(str(round((i/len(sel_files)*100), 3)), str(time.time() - start_time)))
     try:
         pass
-        #shutil.rmtree(cif_path)
+        shutil.rmtree(cif_path)
     except OSError as e:
         print("Error: %s : %s" % (temp_path, e.strerror))
     print("{0} seconds".format(time.time() - start_time))
@@ -221,12 +242,20 @@ def save_list(path, lst_synt):
 
 
 def run_noselection():
-    date_start = datetime.today().strftime('%Y%m%d')
+    start_time = time.time()
+    # I decided to annotate all the proteome and filter the sequences with IDRs later
     fasta_selected = select_fasta(path_fasta)
     #fasta_selected_ori = fasta_selected.copy(); fasta_selected = {k: fasta_selected[k] for k in list(fasta_selected)[:10]}
+    print("Starting DSSP step ...\n")
     ss2append, plddts, errors_dssp = annotate_ss(comp_path_un, fasta_selected, "cif") #Almost 5hs
-    path_ss = basis_path+date_start+'_ss_alphafold.fasta'
+    if len(errors_dssp)>0:
+        file_error = os.path.join(comp_path_un, un_prot+"_alphafold_error.txt")
+        resources.save_sep_llists(errors_dssp, file_error, "\t")
+    path_ss = os.path.join(comp_path_un, un_prot+'_ss_alphafold.fasta')
     append_ss_tofasta(ss2append, path_ss, "new")
-    save_list(basis_path+date_start+"_plddts.tab", plddts)
-    with open(basis_path+date_start+'_ss_alphafold.pickle', 'wb') as handle:
+    save_list(os.path.join(comp_path_un, un_prot+"_plddts.tab"), plddts)
+    with open(os.path.join(comp_path_un, un_prot+'_ss_alphafold.pickle'), 'wb') as handle:
         pickle.dump(ss2append, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    end_time = time.time()
+    time_formated = resources.transform_time(start_time, end_time)
+    print("\nPART 1 FINISHED. Time: {0}".format(time_formated))
