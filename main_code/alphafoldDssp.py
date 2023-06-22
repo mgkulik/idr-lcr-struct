@@ -26,10 +26,10 @@ import resources
 
 #/home/magoncal/Documents/data/projects/idr_cook/
 #basis_path = input("BE CAREFULL!! Set the complete path to the folder of the BASE files: ")
-comp_path = '/home/magoncal/Documents/data/projects/poly_cook/'
-un_prot = 'UP000005640'
-comp_path_un = os.path.join(comp_path, un_prot)
-path_fasta = os.path.join(comp_path_un, un_prot+'_9606.fasta')
+#comp_path = '/home/magoncal/Documents/data/projects/poly_cook/'
+#un_prot = 'UP000005640'
+#comp_path_un = os.path.join(comp_path, un_prot)
+#path_fasta = os.path.join(comp_path_un, un_prot+'_9606.fasta')
 #path_ids = basis_path+'uniprots_final_dataset'
 #path_selected = '/home/magoncal/Documents/data/projects/poly_cook/UP000005640/'
 
@@ -174,6 +174,7 @@ def annotate_ss(comp_path_un, fasta_selected, ptype="cif", dssp=True):
     # Sorting list based on the number of the model (now it is considering numbers as char)
     sel_files = sort_files(sel_files)
 
+    fact = len(list(fasta_selected.keys()))/4
     i=0
     start_time = time.time()
     for name in sel_files:
@@ -195,14 +196,18 @@ def annotate_ss(comp_path_un, fasta_selected, ptype="cif", dssp=True):
         plddt_lst.append(gen_str_row(base+"_"+fold_id, plddt))
         os.remove(comppath)
         i+=1
-        if (i%1000==0):
-            print("{0}% processed {1} seconds".format(str(round((i/len(sel_files)*100), 3)), str(time.time() - start_time)))
+        if (i%int(round(fact/4, 0))==0):
+            end_time = time.time()
+            time_formated = resources.transform_time(start_time, end_time)
+            print("{0}% DSSP processed {1}".format(str(round((i/len(sel_files)*100), 3)), time_formated))
     try:
         pass
         shutil.rmtree(cif_path)
     except OSError as e:
         print("Error: %s : %s" % (temp_path, e.strerror))
-    print("{0} seconds".format(time.time() - start_time))
+    end_time = time.time()
+    time_formated = resources.transform_time(start_time, end_time)
+    print("{0}% DSSP processed {1}".format(str(round((i/len(sel_files)*100), 3)), time_formated))
     return ss_lst, plddt_lst, error_lst
 
 
@@ -241,12 +246,11 @@ def save_list(path, lst_synt):
     textfile.close()
 
 
-def run_noselection():
-    start_time = time.time()
+def run_noselection(comp_path_un, un_prot, path_fasta):
+    #start_time = time.time()
     # I decided to annotate all the proteome and filter the sequences with IDRs later
     fasta_selected = select_fasta(path_fasta)
     #fasta_selected_ori = fasta_selected.copy(); fasta_selected = {k: fasta_selected[k] for k in list(fasta_selected)[:10]}
-    print("Starting DSSP step ...\n")
     ss2append, plddts, errors_dssp = annotate_ss(comp_path_un, fasta_selected, "cif") #Almost 5hs
     if len(errors_dssp)>0:
         file_error = os.path.join(comp_path_un, un_prot+"_alphafold_error.txt")
@@ -256,6 +260,6 @@ def run_noselection():
     save_list(os.path.join(comp_path_un, un_prot+"_plddts.tab"), plddts)
     with open(os.path.join(comp_path_un, un_prot+'_ss_alphafold.pickle'), 'wb') as handle:
         pickle.dump(ss2append, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    end_time = time.time()
-    time_formated = resources.transform_time(start_time, end_time)
-    print("\nPART 1 FINISHED. Time: {0}".format(time_formated))
+    #end_time = time.time()
+    #time_formated = resources.transform_time(start_time, end_time)
+    #print("\nAF PART 1 FINISHED. Time: {0}".format(time_formated))
