@@ -19,6 +19,8 @@ start_time_all = time.time()
 
 for un_prot in folders:
     
+    start_time_un = time.time()
+
     comp_path_un = os.path.join(comp_path, un_prot)
     # MobiDB parameters
     path1 = os.path.join(comp_path_un, un_prot+'.mobi')
@@ -31,6 +33,7 @@ for un_prot in folders:
     path_fasta = os.path.join(comp_path_un, path_fasta[0])
     
     # IDR output
+    # print('\nStarting IDR steps:\n')
     # start_time = time.time()
     tab_idr = os.path.join(comp_path_un, un_prot+"_mobidb_"+group+".tab")
     # idrs_path, idr_fasta_path = idr.run_all(path_fasta, tab_idr, path1, key, name, group)
@@ -44,12 +47,12 @@ for un_prot in folders:
     # _ = idr.get_cider_props(idrs_path, "idr")
     # end_time = time.time()
     # time_formated = resources.transform_time(start_time, end_time)
-    # print("{0} PROPS FINISHED. Time: {1}".format(un_prot, time_formated))
+    # print("{0} IDR PROPS FINISHED. Time: {1}".format(un_prot, time_formated))
     
     # Poly output
     # start_time = time.time()
     
-    print('\nStarting Poly steps:\n')
+    # print('\nStarting Poly steps:\n')
     # cutoff=.6
     # min_size=4
     # idrs_path = resources.gen_filename(tab_idr, "mobidb", group+"_details", "csv")
@@ -73,15 +76,18 @@ for un_prot in folders:
     
     print('\nStarting AF steps:\n')
     afdssp.run_noselection(comp_path_un, un_prot, path_fasta)
-    idraf.main_af_all(comp_path_un, un_prot)
+    idraf.main_af_all(comp_path_un, un_prot, path_fasta)
     
     #else:
     #    print("\n{0} already generated".format(un_prot))
     
-    
     end_time = time.time()
     time_formated = resources.transform_time(start_time, end_time)
     print("\n{0} AF FINISHED. Time: {1}".format(un_prot, time_formated))
+    
+    end_time_un = time.time()
+    time_formated = resources.transform_time(start_time_un, end_time_un)
+    print("\n{0} COMPLETED. Time: {1}".format(un_prot, time_formated))
 
 end_time_all = time.time()
 time_formated = resources.transform_time(start_time_all, end_time_all)

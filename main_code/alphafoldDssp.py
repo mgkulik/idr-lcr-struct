@@ -162,6 +162,7 @@ def extract_from_tar(comp_path_un, ptype="cif"):
 
 
 def annotate_ss(comp_path_un, fasta_selected, ptype="cif", dssp=True):
+    start_time = time.time()
     ss_lst, plddt_lst, error_lst = list(), list(), list()
     # Dropped the idea of selecting the files because the search is too much time consuming
     #cif_subpath, cif_path, sel_files, error_lst = extract_selected(comp_path_un, fasta_selected, ptype)
@@ -173,10 +174,9 @@ def annotate_ss(comp_path_un, fasta_selected, ptype="cif", dssp=True):
     sel_files = [os.path.join(cif_subpath, f) for f in sel_files]
     # Sorting list based on the number of the model (now it is considering numbers as char)
     sel_files = sort_files(sel_files)
-
-    fact = len(list(fasta_selected.keys()))/4
+    fact = int(round(len(list(fasta_selected.keys()))/4, 0))
     i=0
-    start_time = time.time()
+    
     for name in sel_files:
         basename = os.path.splitext(os.path.basename(name))[0]
         file_name = os.path.splitext(basename)[0]
@@ -196,7 +196,7 @@ def annotate_ss(comp_path_un, fasta_selected, ptype="cif", dssp=True):
         plddt_lst.append(gen_str_row(base+"_"+fold_id, plddt))
         os.remove(comppath)
         i+=1
-        if (i%int(round(fact/4, 0))==0):
+        if (i%fact==0):
             end_time = time.time()
             time_formated = resources.transform_time(start_time, end_time)
             print("{0}% DSSP processed {1}".format(str(round((i/len(sel_files)*100), 3)), time_formated))

@@ -565,7 +565,7 @@ def main_idr(idr_path, af_data_path, comp_path_un, un_prot):
     df_idr_2D = pd.merge(idr_data_sel, df_idr_2D, how="left", on="idr_name", suffixes=('', '_y'))
     df_idr_2D = df_idr_2D.loc[:, cols]
     
-    save_name = os.path.join(comp_path_un, un_prot+"idr_af_ss.csv")
+    save_name = os.path.join(comp_path_un, un_prot+"_idr_af_ss.csv")
     df_idr_2D.to_csv(save_name, index=False)
     
 
@@ -661,7 +661,7 @@ def extra_polyXY(polyXY_path):
     df_poly_details.to_csv(polyXY_path, index=False)
 
 
-def main_af_all(comp_path_un, un_prot):
+def main_af_all(comp_path_un, un_prot, path_fasta):
     
     alphafold_ss_path = os.path.join(comp_path_un, un_prot+"_ss_alphafold.fasta")
     #polyXY_path = "/home/magoncal/Documents/data/projects/idr_cook/analysis/data_all_poly_coords.csv"
@@ -671,7 +671,7 @@ def main_af_all(comp_path_un, un_prot):
     plddt_path = os.path.join(comp_path_un, un_prot+"_plddts.tab")
     af_data_path = os.path.join(comp_path_un, un_prot+"_alphafold_data.csv")
     
-    main_af(alphafold_ss_path, fasta_path, plddt_path, af_data_path)
+    main_af(alphafold_ss_path, path_fasta, plddt_path, af_data_path)
     main_idr(idr_path, af_data_path, comp_path_un, un_prot)
     main_poly(polyX_path, af_data_path, comp_path_un, un_prot, "polyX", False, 50, 3)
     extra_polyXY(polyXY_path)
